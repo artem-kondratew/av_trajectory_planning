@@ -1,0 +1,42 @@
+services:
+  ros2:
+    build: .
+    image: ros2_humble
+
+    runtime: nvidia
+
+    environment:
+      - DISPLAY=$DISPLAY
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+
+    working_dir: /workspace
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ../workspace:/workspace
+
+    tty: true
+    stdin_open: true
+    command: bash
+
+  carla:
+    image: carlasim/carla:0.9.16
+
+    runtime: nvidia
+
+    environment:
+      - DISPLAY=$DISPLAY
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+
+    ports:
+      - "2000-2002:2000-2002" 
+
+    shm_size: "8g"
+
+    tty: true
+    stdin_open: true
+    command: bash CarlaUE4.sh --ros2 -nosound 

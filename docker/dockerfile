@@ -1,0 +1,24 @@
+ARG distro_image
+ARG ROS_DISTRO
+
+FROM osrf/ros:humble-desktop-full
+
+# workspace setup
+
+ENV WS=/workspace
+
+RUN echo "source ${WS}/install/setup.bash" >> ~/.bashrc
+RUN echo "alias s='. ./install/setup.bash'" >> ~/.bashrc
+RUN echo "alias l='clear'" >> ~/.bashrc
+
+# ROS2 pkgs installation
+
+RUN apt update -y
+
+RUN DEBIAN_FRONTEND=noninteractive apt install -y python3-venv python3-pip
+RUN DEBIAN_FRONTEND=noninteractive apt install -y vim nano
+RUN DEBIAN_FRONTEND=noninteractive apt install -y iputils-ping
+
+RUN DEBIAN_FRONTEND=noninteractive apt install -y python3-colcon-common-extensions
+
+RUN python3 -m pip install carla==0.9.16 transforms3d
