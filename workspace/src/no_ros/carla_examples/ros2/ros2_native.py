@@ -22,13 +22,17 @@ def _setup_vehicle(world, config):
     bp_library = world.get_blueprint_library()
     map_ = world.get_map()
 
+    spawn_point = map_.get_spawn_points()[0]
+    spawn_point.location.y -= 7.
+
     bp = bp_library.filter(config.get("type"))[0]
+    bp.set_attribute("color", config.get("color"))
     bp.set_attribute("role_name", config.get("id"))
     bp.set_attribute("ros_name", config.get("id")) 
 
     return  world.spawn_actor(
         bp,
-        map_.get_spawn_points()[0],
+        spawn_point,
         attach_to=None)
 
 
@@ -74,16 +78,18 @@ def main(args):
         client = carla.Client(args.host, args.port)
         client.set_timeout(10.0)
 
+        client.load_world('Town06')
+
         world = client.get_world()
 
         original_settings = world.get_settings()
         settings = world.get_settings()
-        settings.synchronous_mode = True
-        settings.fixed_delta_seconds = 0.05
+        settings.synchronous_mode = False
+        # settings.fixed_delta_seconds = 0.01
         world.apply_settings(settings)
 
         traffic_manager = client.get_trafficmanager()
-        traffic_manager.set_synchronous_mode(True)
+        traffic_manager.set_synchronous_mode(False)
 
         with open(args.file) as f:
             config = json.load(f)
@@ -93,7 +99,7 @@ def main(args):
 
         _ = world.tick()
 
-        vehicle.set_autopilot(True)
+        vehicle.set_autopilot(False)
 
         logging.info("Running...")
 
