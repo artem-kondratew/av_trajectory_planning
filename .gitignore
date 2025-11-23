@@ -2,4 +2,5 @@ build
 install
 log
 __pycache_
-carla_pythonapi
+import/*
+!import/.empty

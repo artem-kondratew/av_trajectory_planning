@@ -7,6 +7,7 @@ services:
 
     environment:
       - DISPLAY=$DISPLAY
+      - QT_X11_NO_MITSHM=1
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
 
@@ -15,9 +16,12 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ../workspace:/workspace
 
+    networks:
+      - carla_net
+
     tty: true
     stdin_open: true
-    command: bash
+    entrypoint: []
 
   carla:
     image: carlasim/carla:0.9.16
@@ -31,12 +35,23 @@ services:
 
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ../import:/workspace/Import
+      - ./entrypoint_carla.sh:/entrypoint_carla.sh
+
+    networks:
+      carla_net:
+        aliases:
+          - carla
 
     ports:
-      - "2000-2002:2000-2002" 
+      - "2000-2002:2000-2002"
 
     shm_size: "8g"
 
     tty: true
     stdin_open: true
-    command: bash CarlaUE4.sh --ros2 -nosound 
+    entrypoint: ["bash", "/entrypoint_carla.sh"]
+
+networks:
+  carla_net:
+    driver: bridge
