@@ -3,7 +3,7 @@ import os
 from glob import glob
 from setuptools import find_packages, setup
 
-package_name = 'manual_ackerman_control'
+package_name = 'carla_ros'
 
 setup(
     name=package_name,
@@ -14,13 +14,13 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
-        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
+        (os.path.join('share', package_name, 'config'), glob('config/*')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='artem-kondratew',
     maintainer_email='artemkondratev5@gmail.com',
-    description='Package for carla hero ackerman control',
+    description='Package with carla client functions',
     license='Apache-2.0',
     extras_require={
         'test': [
@@ -29,7 +29,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            "carla_ackermann_publisher = manual_ackerman_control.main:main",
+            "carla_ros = carla_ros.carla_ros:main",
         ],
     },
 )

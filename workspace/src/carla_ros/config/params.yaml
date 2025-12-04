@@ -1,0 +1,5 @@
+carla_ros:
+  ros__parameters:
+    map_name: Town06
+    host: carla
+    port: 2000
