@@ -6,7 +6,10 @@ import numpy as np
 import carla
 import rclpy
 
+from carla.command import SpawnActor, SetAutopilot, FutureActor
+
 from rclpy.node import Node
+from geometry_msgs.msg import Twist
 from visualization_msgs.msg import Marker, MarkerArray
 
 from .submodules.transform_3d import Transform3D
@@ -26,6 +29,8 @@ class CarlaRos(Node):
             ('host', ''),
             ('port', -1),
             ('json_path', ''),
+            ('json_dummy_path', ''),
+            ('spawn_dummy_vehicle', False),
         ]
 
         self.declare_parameters(namespace='', parameters=parameters)
@@ -34,11 +39,15 @@ class CarlaRos(Node):
         host = self.get_parameter('host').get_parameter_value().string_value
         port = self.get_parameter('port').get_parameter_value().integer_value
         json_path = self.get_parameter('json_path').get_parameter_value().string_value
+        json_dummy_path = self.get_parameter('json_dummy_path').get_parameter_value().string_value
+        spawn_dummy_vehicle = self.get_parameter('spawn_dummy_vehicle').get_parameter_value().bool_value
 
         self.get_logger().info(f'map_name: {map_name}')
         self.get_logger().info(f'host: {host}')
         self.get_logger().info(f'port: {port}')
         self.get_logger().info(f'json_path: {json_path}')
+        self.get_logger().info(f'json_dummy_path: {json_dummy_path}')
+        self.get_logger().info(f'spawn_dummy_vehicle: {spawn_dummy_vehicle}')
 
         client = carla.Client(host, port)
         client.set_timeout(10.0)
@@ -57,18 +66,23 @@ class CarlaRos(Node):
         settings.fixed_delta_seconds = dt
         self.world.apply_settings(settings)
 
-        traffic_manager = client.get_trafficmanager()
-        traffic_manager.set_synchronous_mode(True)
+        self.traffic_manager = client.get_trafficmanager()
+        self.traffic_manager.set_synchronous_mode(True)
 
         with open(json_path) as f:
             config = json.load(f)
-
-            self.vehicle : carla.Vehicle = self.setup_vehicle(self.world, config)
+            self.vehicle, spawn_point = self.setup_vehicle(self.world, config)
             self.vehicle.show_debug_telemetry()
 
             self.sensors = self.setup_sensors(self.world, self.vehicle, config.get('sensors', []))
 
             self.vehicle.set_autopilot(False)
+
+        if spawn_dummy_vehicle:
+            with open(json_dummy_path) as f:
+                spawn_point.location.x -= 10
+                config = json.load(f)
+                self.dummy_vehicle = self.setup_dummy_vehicle(self.world, config, spawn_point)
 
         self.world.tick()
 
@@ -76,6 +90,7 @@ class CarlaRos(Node):
         self.create_timer(dt, self.waypoints_callback)
 
         self.marker_pub = self.create_publisher(MarkerArray, '/waypoints', 10)
+        self.velocity_pub = self.create_publisher(Twist, '/carla/hero/local_velocity', 10)
         
     def location_to_list(self, location : carla.Location) -> list:
         return [location.x, location.y, location.z]
@@ -104,6 +119,23 @@ class CarlaRos(Node):
     def waypoints_callback(self):
         vehicle_location = self.vehicle.get_location()
         current_lane = self.map.get_waypoint(vehicle_location, project_to_road=False)
+
+        # get velocity in local frame
+        transform = self.vehicle.get_transform()
+        forward_vec = transform.get_forward_vector()
+        right_vec = transform.get_right_vector()
+        left_vec = carla.Vector3D(-right_vec.x, -right_vec.y, -right_vec.z)
+
+        velocity = self.vehicle.get_velocity()
+
+        velocity_forward = velocity.x * forward_vec.x + velocity.y * forward_vec.y + velocity.z * forward_vec.z
+        velocity_left = velocity.x * left_vec.x + velocity.y * left_vec.y + velocity.z * left_vec.z
+
+        velocity_msg = Twist()
+        velocity_msg.linear.x = velocity_forward
+        velocity_msg.linear.y = velocity_left
+
+        self.velocity_pub.publish(velocity_msg)
 
         if current_lane is None:
             return
@@ -141,7 +173,10 @@ class CarlaRos(Node):
         next_current_lane_waypoints = []
         wp = current_lane
         for _ in range(100):
-            wp = wp.next(0.2)[0]
+            wp_list = wp.next(0.2)
+            if not wp_list:
+                continue
+            wp = wp_list[0]
             next_current_lane_waypoints.append(wp)
 
         offset_y = current_lane.lane_width/2
@@ -213,8 +248,8 @@ class CarlaRos(Node):
         map_ = world.get_map()
 
         spawn_point = map_.get_spawn_points()[0]
-        spawn_point.location.y -= 14.
-
+        # spawn_point.location.y -= 14.
+            
         bp = bp_library.filter(config.get('type'))[0]
         bp.set_attribute('color', config.get('color'))
         bp.set_attribute('role_name', config.get('id'))
@@ -223,7 +258,22 @@ class CarlaRos(Node):
         return  world.spawn_actor(
             bp,
             spawn_point,
-            attach_to=None)
+            attach_to=None), spawn_point
+    
+    def setup_dummy_vehicle(self, world : carla.World, config, spawn_point : carla.Transform):
+        bp_library = world.get_blueprint_library()
+        bp = bp_library.filter(config.get('type'))[0]
+        bp.set_attribute('role_name', 'autopilot_dummy')
+        bp.set_attribute('color', config.get('color', '255,0,0'))
+
+        dummy_actor = world.spawn_actor(bp, spawn_point)
+        
+        self.traffic_manager.auto_lane_change(dummy_actor, False)
+        self.traffic_manager.vehicle_lane_offset(dummy_actor, 0.0)
+        self.traffic_manager.vehicle_percentage_speed_difference(dummy_actor, 0.0)
+        dummy_actor.set_autopilot(True, self.traffic_manager.get_port())
+        
+        return dummy_actor
 
     def setup_sensors(self, world, vehicle, sensors_config):
         bp_library = world.get_blueprint_library()
