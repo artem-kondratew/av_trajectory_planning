@@ -7,6 +7,7 @@ FROM osrf/ros:humble-desktop-full
 
 ENV WS=/workspace
 
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc
 RUN echo "source ${WS}/install/setup.bash" >> ~/.bashrc
 RUN echo "alias s='. ./install/setup.bash'" >> ~/.bashrc
 RUN echo "alias l='clear'" >> ~/.bashrc
