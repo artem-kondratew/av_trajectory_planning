@@ -1,0 +1,40 @@
+cmake_minimum_required(VERSION 3.8)
+project(adas)
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native -Ofast")
+
+find_package(ament_cmake REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+
+add_executable(adas_node
+    src/adas_node.cpp
+    src/cruise_controller.cpp
+)
+
+target_include_directories(adas_node
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+ament_target_dependencies(adas_node geometry_msgs rclcpp sensor_msgs)
+
+install(DIRECTORY
+    src launch config
+    DESTINATION share/${PROJECT_NAME}
+)
+
+install(TARGETS
+    adas_node
+    DESTINATION lib/${PROJECT_NAME}
+)
+
+ament_package()
