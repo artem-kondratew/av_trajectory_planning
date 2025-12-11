@@ -16,6 +16,7 @@ RUN echo "alias l='clear'" >> ~/.bashrc
 
 RUN apt update -y
 
+RUN DEBIAN_FRONTEND=noninteractive apt install -y make cmake g++
 RUN DEBIAN_FRONTEND=noninteractive apt install -y python3-venv python3-pip
 RUN DEBIAN_FRONTEND=noninteractive apt install -y vim nano
 RUN DEBIAN_FRONTEND=noninteractive apt install -y iputils-ping
@@ -25,3 +26,18 @@ RUN DEBIAN_FRONTEND=noninteractive apt install -y python3-colcon-common-extensio
 RUN DEBIAN_FRONTEND=noninteractive apt install -y ros-${ROS_DISTRO}-ackermann-msgs
 
 RUN python3 -m pip install carla==0.9.16 transforms3d
+
+# Eigen installation
+
+ENV EIGEN_DIR=/usr/local/include/eigen
+
+RUN git clone https://gitlab.com/libeigen/eigen.git ${EIGEN_DIR}
+RUN mv ${EIGEN_DIR}/Eigen ${EIGEN_DIR}/unsupported ${EIGEN_DIR}/../ && rm -rf ${EIGEN_DIR}
+
+# OSQP installation
+
+RUN git clone --recursive https://github.com/osqp/osqp.git && \
+    mkdir osqp-build && \
+    cmake -S osqp -B osqp-build -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build osqp-build --parallel && \
+    cmake --build osqp-build --target install
