@@ -16,7 +16,6 @@ RUN echo "alias l='clear'" >> ~/.bashrc
 
 RUN apt update -y
 
-RUN DEBIAN_FRONTEND=noninteractive apt install -y make cmake g++
 RUN DEBIAN_FRONTEND=noninteractive apt install -y python3-venv python3-pip
 RUN DEBIAN_FRONTEND=noninteractive apt install -y vim nano
 RUN DEBIAN_FRONTEND=noninteractive apt install -y iputils-ping
@@ -29,10 +28,7 @@ RUN python3 -m pip install carla==0.9.16 transforms3d
 
 # Eigen installation
 
-ENV EIGEN_DIR=/usr/local/include/eigen
-
-RUN git clone https://gitlab.com/libeigen/eigen.git ${EIGEN_DIR}
-RUN mv ${EIGEN_DIR}/Eigen ${EIGEN_DIR}/unsupported ${EIGEN_DIR}/../ && rm -rf ${EIGEN_DIR}
+RUN DEBIAN_FRONTEND=noninteractive apt install -y libeigen3-dev
 
 # OSQP installation
 

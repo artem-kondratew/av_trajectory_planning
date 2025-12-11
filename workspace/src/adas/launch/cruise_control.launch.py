@@ -9,7 +9,7 @@ from launch_ros.actions import Node
 
 package_name = 'adas'
 
-# parameters = [os.path.join(get_package_share_directory(package_name), 'config', 'params.yaml')]
+parameters = os.path.join(get_package_share_directory(package_name), 'config', 'cruise_control_params.yaml')
 
 def generate_launch_description():
     ld = LaunchDescription()
@@ -23,7 +23,7 @@ def generate_launch_description():
     adas_node = Node(
         package=package_name,
         executable='adas_node',
-        # parameters=[parameters, {'json_path': LaunchConfiguration('json_path')}, {'json_dummy_path': LaunchConfiguration('json_dummy_path')}],
+        parameters=[parameters],
         output='screen',
     )
     

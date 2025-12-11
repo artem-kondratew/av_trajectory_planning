@@ -16,19 +16,17 @@ CruiseController::CruiseController(
 {}
 
 
-std::tuple<double, double> CruiseController::calculate_control(double dt, double v_ref, double v, double a) {
+double CruiseController::calculate_control(double dt, double v_ref, double v, double a) {
     double j = (a - a_prev_) / dt;
 
     double a01 = dt;
     double a11 = 1 - dt / tau_;
     double a21 = -1 / tau_;
 
-    double A_data[] = {
-        1, a01, 0,
-        0, a11, 0,
-        0, a21, 0,
-    };
-    Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> A(A_data);
+    Eigen::Matrix3d A;
+    A << 1, a01, 0,
+         0, a11, 0,
+         0, a21, 0;
 
     Eigen::Matrix3d C = Eigen::Matrix3d::Identity();
 
@@ -48,5 +46,5 @@ std::tuple<double, double> CruiseController::calculate_control(double dt, double
 
     a_prev_ = a;
 
-    return std::tuple<double, double>();
+    return 0;
 }
