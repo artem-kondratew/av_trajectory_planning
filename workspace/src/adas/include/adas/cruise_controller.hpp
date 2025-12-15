@@ -5,31 +5,70 @@
 #include <tuple>
 
 #include <Eigen/Dense>
+#include <OsqpEigen/OsqpEigen.h>
 
+
+namespace cruise_control {
+
+struct Limit {
+    double min;
+    double max;
+
+    Limit(double min, double max) : min{min}, max{max} {}
+};
 
 class CruiseController {
 private:
-    double tau_;
-    std::tuple<double, double> v_constr_;
-    std::tuple<double, double> a_constr_;
-    std::tuple<double, double> j_constr_;
-    std::tuple<double, double> u_constr_;
+    const double tau;
+    const int p;
+    const int c;
 
-    double a_prev_ = 0;
+    static constexpr int n_in = 3;
+    static constexpr int n_out = 3;
+
+    Eigen::Matrix<double, n_in, n_in> A;
+    Eigen::VectorXd B;
+    Eigen::MatrixXd C;
+    Eigen::VectorXd Z;
+    Eigen::MatrixXd H;
+    Eigen::MatrixXd F;
+
+    Eigen::MatrixXd A_hat;
+    Eigen::MatrixXd B_hat;
+    Eigen::MatrixXd C_hat;
+    Eigen::MatrixXd H_hat;
+    Eigen::VectorXd Z_hat;
+    Eigen::MatrixXd D_hat;
+    Eigen::MatrixXd F_hat;
+
+    int cnt = 0;
+
+    double a_prev = 0;
+
+    const Limit v_limits;
+    const Limit a_limits;
+    const Limit j_limits;
+    const Limit u_limits;
+
+    OsqpEigen::Solver solver;
      
 public:
-    CruiseController() = default;
-
     CruiseController(
         double tau,
-        const std::tuple<double, double>& v_constr,
-        const std::tuple<double, double>& a_constr,
-        const std::tuple<double, double>& j_constr,
-        const std::tuple<double, double>& u_constr
+        int p,
+        int c,
+        const Limit& v_limits,
+        const Limit& a_limits,
+        const Limit& j_limits,
+        const Limit& u_limits
     );
 
     double calculate_control(double dt, double v_ref, double v, double a);
+
+    void reset(double ts);
 };
+
+}
 
 
 #endif  // ADAS_CRUISE_CONTROLLER_HPP

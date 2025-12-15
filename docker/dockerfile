@@ -37,3 +37,9 @@ RUN git clone --recursive https://github.com/osqp/osqp.git && \
     cmake -S osqp -B osqp-build -DCMAKE_BUILD_TYPE=Release && \
     cmake --build osqp-build --parallel && \
     cmake --build osqp-build --target install
+
+RUN git clone --recursive https://github.com/robotology/osqp-eigen.git && \
+    mkdir eigen-osqp-build && \
+    cmake -S osqp-eigen -B eigen-osqp-build -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build eigen-osqp-build --parallel && \
+    cmake --build eigen-osqp-build --target install

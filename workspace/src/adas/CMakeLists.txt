@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native -Ofast")
 
 find_package(Eigen3 REQUIRED)
-find_package(osqp REQUIRED)
+find_package(OsqpEigen REQUIRED)
 
 find_package(ament_cmake REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -30,7 +30,7 @@ target_include_directories(adas_node
 
 target_link_libraries(adas_node
     Eigen3::Eigen
-    osqp::osqp
+    OsqpEigen::OsqpEigen
 )
 
 ament_target_dependencies(adas_node geometry_msgs rclcpp sensor_msgs)

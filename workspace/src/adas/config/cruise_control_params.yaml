@@ -2,9 +2,11 @@ adas_node:
   ros__parameters:
     local_velocity_topic: /carla/hero/local_velocity
     imu_topic: /carla/hero/imu
-    tau: 0.1
+    tau: 0.2
+    prediction_steps_num: 10
+    control_steps_num: 5
     v_ref: 80.0
-    v_constr: [0.0, 120.0]
-    a_constr: [-20.0, 20.0]
-    j_constr: [-20.0, 20.0]
-    u_constr: [-20.0, 20.0]
+    v_limits: [0.0, 200.0]
+    a_limits: [-20.0, 20.0]
+    j_limits: [-20.0, 20.0]
+    u_limits: [-20.0, 20.0]
