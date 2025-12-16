@@ -41,9 +41,19 @@ private:
     Eigen::MatrixXd D_hat;
     Eigen::MatrixXd F_hat;
 
-    int cnt = 0;
+    Eigen::MatrixXd FA;
+    Eigen::MatrixXd Q;
 
+    Eigen::MatrixXd H1;
+
+    Eigen::MatrixXd M2;
+
+    static constexpr double s = 18;
+
+    Eigen::Vector<double, n_in> x_predicted;
+    
     double a_prev = 0;
+    double u_prev = 0;
 
     const Limit v_limits;
     const Limit a_limits;
@@ -51,6 +61,8 @@ private:
     const Limit u_limits;
 
     OsqpEigen::Solver solver;
+
+    bool solver_init_flag = false;
      
 public:
     CruiseController(
@@ -64,8 +76,6 @@ public:
     );
 
     double calculate_control(double dt, double v_ref, double v, double a);
-
-    void reset(double ts);
 };
 
 }

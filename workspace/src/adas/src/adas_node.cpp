@@ -7,6 +7,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 
+#include <carla_msgs/msg/carla_ego_vehicle_control.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
@@ -23,6 +24,7 @@ class ADASNode : public rclcpp::Node {
 private:
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr linear_velocity_sub_;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
+    rclcpp::Publisher<carla_msgs::msg::CarlaEgoVehicleControl>::SharedPtr control_pub_;
 
     std::unique_ptr<cc::CruiseController> cruise_controller_;
 
@@ -48,6 +50,7 @@ private:
 ADASNode::ADASNode() : Node("adas_node") {
     this->declare_parameter("local_velocity_topic", rclcpp::PARAMETER_STRING);
     this->declare_parameter("imu_topic", rclcpp::PARAMETER_STRING);
+    this->declare_parameter("control_topic", rclcpp::PARAMETER_STRING);
     this->declare_parameter("tau", rclcpp::PARAMETER_DOUBLE);
     this->declare_parameter("prediction_steps_num", rclcpp::PARAMETER_INTEGER);
     this->declare_parameter("control_steps_num", rclcpp::PARAMETER_INTEGER);
@@ -59,6 +62,7 @@ ADASNode::ADASNode() : Node("adas_node") {
 
     std::string local_velocity_topic = this->get_parameter("local_velocity_topic").as_string();
     std::string imu_topic = this->get_parameter("imu_topic").as_string();
+    std::string control_topic = this->get_parameter("control_topic").as_string();
     double tau = this->get_parameter("tau").as_double();
     int p = this->get_parameter("prediction_steps_num").as_int();
     int c = this->get_parameter("control_steps_num").as_int();
@@ -70,6 +74,7 @@ ADASNode::ADASNode() : Node("adas_node") {
 
     RCLCPP_INFO(this->get_logger(), "local_velocity_topic: '%s'", local_velocity_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "imu_topic: '%s'", imu_topic.c_str());
+    RCLCPP_INFO(this->get_logger(), "control_topic: '%s'", control_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "tau: %lf", tau);
     RCLCPP_INFO(this->get_logger(), "v_ref: %lf km/h", v_ref_);
     RCLCPP_INFO(this->get_logger(), "v_limits: [%lf, %lf] km/h", v_limits.min, v_limits.max);
@@ -83,6 +88,7 @@ ADASNode::ADASNode() : Node("adas_node") {
 
     linear_velocity_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(local_velocity_topic, 10, std::bind(&ADASNode::linearVelocityCallback, this, _1));
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(imu_topic, 10, std::bind(&ADASNode::imuCallback, this, _1));
+    control_pub_ = this->create_publisher<carla_msgs::msg::CarlaEgoVehicleControl>(control_topic, 10);
 
     cruise_controller_ = std::make_unique<cc::CruiseController>(tau, p, c, v_limits, a_limits, j_limits, u_limits);
 
@@ -98,7 +104,14 @@ void ADASNode::linearVelocityCallback(const geometry_msgs::msg::Twist& msg) {
 
     double a = last_imu_msg_.linear_acceleration.x;
 
-    cruise_controller_->calculate_control(dt, v_ref_, v, a);
+    double u = cruise_controller_->calculate_control(dt, v_ref_, v, a);
+
+    auto control_msg = carla_msgs::msg::CarlaEgoVehicleControl();
+    
+    control_msg.throttle = std::abs(u);
+    control_msg.reverse = (u < 0) ? 1 : 0;
+
+    control_pub_->publish(control_msg);
 
     t_last_ = t;
 }

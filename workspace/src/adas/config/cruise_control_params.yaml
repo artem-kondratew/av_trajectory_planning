@@ -2,6 +2,7 @@ adas_node:
   ros__parameters:
     local_velocity_topic: /carla/hero/local_velocity
     imu_topic: /carla/hero/imu
+    control_topic: /carla/hero/vehicle_control_cmd
     tau: 0.2
     prediction_steps_num: 10
     control_steps_num: 5
