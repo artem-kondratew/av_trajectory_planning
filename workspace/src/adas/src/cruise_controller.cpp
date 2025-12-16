@@ -4,12 +4,16 @@
 
 #include <unsupported/Eigen/MatrixFunctions>
 
+
 namespace cruise_control {
 
 CruiseController::CruiseController(
     double tau,
     int p,
     int c,
+    double s,
+    const std::vector<double>& phi_vals,
+    const std::vector<double>& q_vals,
     const Limit& v_limits,
     const Limit& a_limits,
     const Limit& j_limits,
@@ -18,6 +22,7 @@ CruiseController::CruiseController(
     : tau{tau}
     , p{p}
     , c{c}
+    , s{s}
     , v_limits{v_limits}
     , a_limits{a_limits}
     , j_limits{j_limits}
@@ -33,7 +38,7 @@ CruiseController::CruiseController(
         F_hat.block(i * F.rows(), 0, F.rows(), H.cols()) = F;
     }
 
-    Eigen::Vector<double, n_out> phi{0.95, 0.95, 0.95};
+    Eigen::Vector<double, n_out> phi = Eigen::VectorXd::Map(phi_vals.data(), n_out);
     Eigen::Matrix<double, n_out, n_out> fa = phi.asDiagonal();
 
     FA = Eigen::MatrixXd::Zero(n_out * p, n_out);
@@ -42,7 +47,7 @@ CruiseController::CruiseController(
         FA.block(i * fa.rows(), 0, fa.rows(), fa.cols()) = fa.pow(i + 1);
     }
 
-    const Eigen::Vector<double, n_out> qw{10, 1, 1};
+    const Eigen::Vector<double, n_out> qw = Eigen::VectorXd::Map(q_vals.data(), n_out);
     const Eigen::Matrix<double, n_out, n_out> q = qw.asDiagonal();
 
     Q = Eigen::MatrixXd::Zero(n_out * p, n_out * p);
@@ -63,8 +68,6 @@ CruiseController::CruiseController(
         }
     }
 
-    x_predicted = Eigen::VectorXd::Zero(n_in);
-
     solver.settings()->setTimeLimit(0.04);
     solver.settings()->setVerbosity(false);
     solver.data()->setNumberOfVariables(c);
@@ -74,10 +77,17 @@ CruiseController::CruiseController(
 
 double CruiseController::calculate_control(double ts, double v_ref, double v, double a) {
     double j = (a - a_prev) / ts;
+    j = 0;
 
     Eigen::Vector3d x{v, a, j};
 
-    Eigen::VectorXd ex = x - x_predicted;
+    Eigen::VectorXd ex;
+    if (!x_predicted) {
+        ex = Eigen::VectorXd::Zero(n_in);
+    }
+    else {
+        ex = x - *x_predicted;
+    }
 
     A = Eigen::Matrix<double, n_in, n_in>{
         {1,  ts,         0},
@@ -129,21 +139,21 @@ double CruiseController::calculate_control(double ts, double v_ref, double v, do
     Eigen::MatrixXd Hqp = H1 + H2;
     Eigen::VectorXd g = g1 + g2;
 
-    Eigen::VectorXd u_min = Eigen::VectorXd::Constant(c, -0.5);
-    Eigen::VectorXd u_max = Eigen::VectorXd::Constant(c,  0.5);
+    Eigen::VectorXd u_min = Eigen::VectorXd::Constant(c, -1.0);
+    Eigen::VectorXd u_max = Eigen::VectorXd::Constant(c,  1.0);
 
     Eigen::SparseMatrix<double> constr_matrix = Eigen::MatrixXd::Identity(c, c).sparseView();
 
     Eigen::SparseMatrix<double> Hqp_sparse = Hqp.sparseView();
 
-    if (!solver_init_flag) {
-        solver_init_flag = true;
-
+    if (!x_predicted) {
         solver.data()->setHessianMatrix(Hqp_sparse);
         solver.data()->setGradient(g);
         solver.data()->setLinearConstraintsMatrix(constr_matrix);
         solver.data()->setLowerBound(u_min);
         solver.data()->setUpperBound(u_max);
+
+        solver.settings()->setWarmStart(false);
 
         solver.initSolver();
     }

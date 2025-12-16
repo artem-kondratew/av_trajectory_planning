@@ -2,7 +2,7 @@
 #define ADAS_CRUISE_CONTROLLER_HPP
 
 
-#include <tuple>
+#include <optional>
 
 #include <Eigen/Dense>
 #include <OsqpEigen/OsqpEigen.h>
@@ -22,6 +22,7 @@ private:
     const double tau;
     const int p;
     const int c;
+    const double s;
 
     static constexpr int n_in = 3;
     static constexpr int n_out = 3;
@@ -48,9 +49,7 @@ private:
 
     Eigen::MatrixXd M2;
 
-    static constexpr double s = 18;
-
-    Eigen::Vector<double, n_in> x_predicted;
+    std::optional<Eigen::Vector<double, n_in>> x_predicted;
     
     double a_prev = 0;
     double u_prev = 0;
@@ -61,14 +60,15 @@ private:
     const Limit u_limits;
 
     OsqpEigen::Solver solver;
-
-    bool solver_init_flag = false;
      
 public:
     CruiseController(
         double tau,
         int p,
         int c,
+        double s,
+        const std::vector<double>& phi_vals,
+        const std::vector<double>& q_vals,
         const Limit& v_limits,
         const Limit& a_limits,
         const Limit& j_limits,

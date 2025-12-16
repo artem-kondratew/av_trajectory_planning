@@ -4,10 +4,13 @@ adas_node:
     imu_topic: /carla/hero/imu
     control_topic: /carla/hero/vehicle_control_cmd
     tau: 0.2
-    prediction_steps_num: 10
-    control_steps_num: 5
+    p: 10
+    c: 5
     v_ref: 80.0
     v_limits: [0.0, 200.0]
     a_limits: [-20.0, 20.0]
     j_limits: [-20.0, 20.0]
     u_limits: [-20.0, 20.0]
+    phi_vals: [0.95, 0.95, 0.95]
+    q_vals: [10., 1., 1.]
+    s: 18.

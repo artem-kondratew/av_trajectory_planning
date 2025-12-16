@@ -5,3 +5,7 @@ __pycache__
 import/*
 !import/.empty
 core
+venv
+.vscode
+data
+!data/.empty
