@@ -54,9 +54,6 @@ private:
     double a_prev = 0;
     double u_prev = 0;
 
-    const Limit v_limits;
-    const Limit a_limits;
-    const Limit j_limits;
     const Limit u_limits;
 
     OsqpEigen::Solver solver;
@@ -69,13 +66,10 @@ public:
         double s,
         const std::vector<double>& phi_vals,
         const std::vector<double>& q_vals,
-        const Limit& v_limits,
-        const Limit& a_limits,
-        const Limit& j_limits,
         const Limit& u_limits
     );
 
-    double calculate_control(double dt, double v_ref, double v, double a);
+    std::pair<double, const Eigen::Vector<double, n_out>> calculate_control(double dt, double v_ref, double v, double a);
 };
 
 }

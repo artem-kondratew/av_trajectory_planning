@@ -7,10 +7,7 @@ adas_node:
     p: 10
     c: 10
     v_ref: 40.0
-    v_limits: [0.0, 200.0]
-    a_limits: [-20.0, 20.0]
-    j_limits: [-20.0, 20.0]
-    u_limits: [-20.0, 20.0]
+    u_limits: [-0.01, 1.0]
     phi_vals: [0.95, 0.95, 0.95]
     q_vals: [10., 1., 1.]
     s: 18.

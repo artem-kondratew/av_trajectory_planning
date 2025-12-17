@@ -1,4 +1,6 @@
+setuptools
 pandas
 pyyaml
 rosbag2_py
 pyarrow
+duckdb

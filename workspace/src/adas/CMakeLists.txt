@@ -18,6 +18,7 @@ find_package(carla_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 
 add_executable(adas_node
     src/adas_node.cpp
@@ -34,7 +35,7 @@ target_link_libraries(adas_node
     OsqpEigen::OsqpEigen
 )
 
-ament_target_dependencies(adas_node carla_msgs geometry_msgs rclcpp sensor_msgs)
+ament_target_dependencies(adas_node carla_msgs geometry_msgs rclcpp sensor_msgs std_msgs)
 
 install(DIRECTORY
     launch config

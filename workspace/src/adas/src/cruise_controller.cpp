@@ -14,18 +14,12 @@ CruiseController::CruiseController(
     double s,
     const std::vector<double>& phi_vals,
     const std::vector<double>& q_vals,
-    const Limit& v_limits,
-    const Limit& a_limits,
-    const Limit& j_limits,
     const Limit& u_limits
 )
     : tau{tau}
     , p{p}
     , c{c}
     , s{s}
-    , v_limits{v_limits}
-    , a_limits{a_limits}
-    , j_limits{j_limits}
     , u_limits{u_limits} {
 
     C = Eigen::Matrix<double, n_out, n_in>::Identity();
@@ -75,7 +69,7 @@ CruiseController::CruiseController(
 }
 
 
-double CruiseController::calculate_control(double ts, double v_ref, double v, double a) {
+std::pair<double, const Eigen::Vector<double, CruiseController::n_out>> CruiseController::calculate_control(double ts, double v_ref, double v, double a) {
     double j = (a - a_prev) / ts;
     j = 0;
 
@@ -139,8 +133,8 @@ double CruiseController::calculate_control(double ts, double v_ref, double v, do
     Eigen::MatrixXd Hqp = H1 + H2;
     Eigen::VectorXd g = g1 + g2;
 
-    Eigen::VectorXd u_min = Eigen::VectorXd::Constant(c, -0.01);
-    Eigen::VectorXd u_max = Eigen::VectorXd::Constant(c,  1.0);
+    Eigen::VectorXd u_min = Eigen::VectorXd::Constant(c, u_limits.min);
+    Eigen::VectorXd u_max = Eigen::VectorXd::Constant(c,  u_limits.max);
 
     Eigen::SparseMatrix<double> constr_matrix = Eigen::MatrixXd::Identity(c, c).sparseView();
 
@@ -175,8 +169,6 @@ double CruiseController::calculate_control(double ts, double v_ref, double v, do
         solver.settings()->setWarmStart(true);
     }
 
-    // res = std::clamp(res, -1.0, 1.0);
-
     std::cout <<"u = " << res << " v_ref = " << v_ref << std::endl;
 
     x_predicted = B * res + A * x + H * ex;
@@ -184,7 +176,7 @@ double CruiseController::calculate_control(double ts, double v_ref, double v, do
 
     a_prev = a;
 
-    return res;
+    return std::make_pair(res, y);
 }
 
 }
