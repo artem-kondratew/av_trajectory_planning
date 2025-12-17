@@ -45,9 +45,9 @@ def load_topic_dataframes(filepath: str) -> Dict[str, pd.DataFrame]:
     y = df[df["topic"] == "/cruise_controller/y_vector"]
     result["y_vector"] = y[[
         "t",
-        "y_x",
-        "y_y",
-        "y_z",
+        "dv",
+        "a",
+        "j",
     ]].reset_index(drop=True)
 
     # ---------------- velocity ----------------

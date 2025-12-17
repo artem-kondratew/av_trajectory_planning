@@ -11,6 +11,7 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc
 RUN echo "source ${WS}/install/setup.bash" >> ~/.bashrc
 RUN echo "alias s='. ./install/setup.bash'" >> ~/.bashrc
 RUN echo "alias l='clear'" >> ~/.bashrc
+RUN echo "alias record='bash /record.sh'" >> ~/.bashrc
 
 # ROS2 pkgs installation
 

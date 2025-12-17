@@ -16,6 +16,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ../workspace:/workspace
       - ../data:/data
+      - ../scripts/record.sh:/record.sh
 
     networks:
       - carla_net
