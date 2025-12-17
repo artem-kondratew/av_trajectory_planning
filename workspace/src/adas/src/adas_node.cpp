@@ -117,6 +117,8 @@ void ADASNode::linearVelocityCallback(const geometry_msgs::msg::Twist& msg) {
 
     double a = last_imu_msg_.linear_acceleration.x;
 
+    v_ref_ = this->get_parameter("v_ref").as_double() * kmh2ms;
+
     double u = cruise_controller_->calculate_control(dt, v_ref_, v, a);
 
     auto control_msg = carla_msgs::msg::CarlaEgoVehicleControl();
@@ -124,18 +126,12 @@ void ADASNode::linearVelocityCallback(const geometry_msgs::msg::Twist& msg) {
     double throttle_hold = 0.1;
     double u_brake_deadzone = 0.2;
 
-    if (u >= 0.0) {
-    control_msg.throttle = std::clamp(throttle_hold + u, 0.0, 1.0);
-    control_msg.brake = 0.0;
+    if (u >= 0) {
+        control_msg.throttle = std::clamp(u, 0., 1.);
     }
-    // else if (u < -u_brake_deadzone) {
-    //     control_msg.throttle = 0.0;
-    //     control_msg.brake = std::clamp(-u, 0.0, 0.05);
-    // }
-    // else {
-    //     control_msg.throttle = throttle_hold;
-    //     control_msg.brake = 0.0;
-    // }
+    else {
+        control_msg.brake = std::clamp(-u, 0., 1.);
+    }
 
     control_pub_->publish(control_msg);
 

@@ -139,7 +139,7 @@ double CruiseController::calculate_control(double ts, double v_ref, double v, do
     Eigen::MatrixXd Hqp = H1 + H2;
     Eigen::VectorXd g = g1 + g2;
 
-    Eigen::VectorXd u_min = Eigen::VectorXd::Constant(c, -1.0);
+    Eigen::VectorXd u_min = Eigen::VectorXd::Constant(c, -0.01);
     Eigen::VectorXd u_max = Eigen::VectorXd::Constant(c,  1.0);
 
     Eigen::SparseMatrix<double> constr_matrix = Eigen::MatrixXd::Identity(c, c).sparseView();
@@ -175,7 +175,7 @@ double CruiseController::calculate_control(double ts, double v_ref, double v, do
         solver.settings()->setWarmStart(true);
     }
 
-    res = std::clamp(res, -1.0, 1.0);
+    // res = std::clamp(res, -1.0, 1.0);
 
     std::cout <<"u = " << res << " v_ref = " << v_ref << std::endl;
 
