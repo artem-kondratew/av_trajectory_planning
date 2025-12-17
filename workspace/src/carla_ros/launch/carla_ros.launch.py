@@ -5,6 +5,8 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 
 package_name = 'carla_ros'
@@ -41,10 +43,18 @@ def generate_launch_description():
         arguments=['-d', rviz2_config],
         output='screen',
     )
+
+    manual_ackermann_control = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [os.path.join(get_package_share_directory('manual_ackermann_control'), 'launch', 'manual_control.launch.py')]
+        ),
+        launch_arguments={'use_sim_time': 'false'}.items()
+    )
     
     ld.add_action(json_path)
     ld.add_action(json_dummy_path)
     ld.add_action(carla_ros)
     ld.add_action(rviz2)
+    ld.add_action(manual_ackermann_control)
     
     return ld
