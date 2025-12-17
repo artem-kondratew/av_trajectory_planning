@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>manual_ackerman_control</name>
+  <name>manual_ackermann_control</name>
   <version>0.0.0</version>
-  <description>Package for carla hero ackerman control</description>
+  <description>Package for carla hero ackermann control</description>
   <maintainer email="artemkondratev5@gmail.com">artem-kondratew</maintainer>
   <license>Apache-2.0</license>
 

@@ -3,7 +3,7 @@ import os
 from glob import glob
 from setuptools import find_packages, setup
 
-package_name = 'manual_ackerman_control'
+package_name = 'manual_ackermann_control'
 
 setup(
     name=package_name,
@@ -20,7 +20,7 @@ setup(
     zip_safe=True,
     maintainer='artem-kondratew',
     maintainer_email='artemkondratev5@gmail.com',
-    description='Package for carla hero ackerman control',
+    description='Package for carla hero ackermann control',
     license='Apache-2.0',
     extras_require={
         'test': [
@@ -29,7 +29,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            "carla_ackermann_publisher = manual_ackerman_control.main:main",
+            "carla_ackermann_publisher = manual_ackermann_control.main:main",
         ],
     },
 )

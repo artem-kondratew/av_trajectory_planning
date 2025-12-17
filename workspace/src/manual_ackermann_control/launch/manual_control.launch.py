@@ -7,7 +7,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
-package_name = 'manual_ackerman_control'
+package_name = 'manual_ackermann_control'
 
 parameters = [os.path.join(get_package_share_directory(package_name), 'config', 'params.yaml')]
 
