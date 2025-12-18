@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 import json
 import numpy as np
 
@@ -8,6 +9,7 @@ import rclpy
 
 from carla.command import SpawnActor, SetAutopilot, FutureActor
 
+from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from visualization_msgs.msg import Marker, MarkerArray
@@ -26,6 +28,7 @@ class CarlaRos(Node):
 
         parameters = [
             ('map_name', ''),
+            ('use_custom_map', False),
             ('host', ''),
             ('port', -1),
             ('json_path', ''),
@@ -36,6 +39,7 @@ class CarlaRos(Node):
         self.declare_parameters(namespace='', parameters=parameters)
 
         map_name = self.get_parameter('map_name').get_parameter_value().string_value
+        use_custom_map = self.get_parameter('use_custom_map').get_parameter_value().bool_value
         host = self.get_parameter('host').get_parameter_value().string_value
         port = self.get_parameter('port').get_parameter_value().integer_value
         json_path = self.get_parameter('json_path').get_parameter_value().string_value
@@ -43,6 +47,7 @@ class CarlaRos(Node):
         spawn_dummy_vehicle = self.get_parameter('spawn_dummy_vehicle').get_parameter_value().bool_value
 
         self.get_logger().info(f'map_name: {map_name}')
+        self.get_logger().info(f'use_custom_map: {use_custom_map}')
         self.get_logger().info(f'host: {host}')
         self.get_logger().info(f'port: {port}')
         self.get_logger().info(f'json_path: {json_path}')
@@ -52,9 +57,22 @@ class CarlaRos(Node):
         client = carla.Client(host, port)
         client.set_timeout(10.0)
 
-        client.load_world(map_name)
+        if not use_custom_map:
+            client.load_world(map_name)
+            self.world = client.get_world()
+        else:
+            map_name = os.path.join(get_package_share_directory('carla_ros'), 'maps', map_name)
+            with open(map_name) as f:
+                xodr = f.read()
 
-        self.world = client.get_world()
+            self.world = client.generate_opendrive_world(
+                xodr,
+                carla.OpendriveGenerationParameters(
+                    vertex_distance=2.0,
+                    smooth_junctions=True
+                )
+            )
+
         self.map = self.world.get_map()
 
         self.original_settings = self.world.get_settings()

@@ -4,3 +4,4 @@ pyyaml
 rosbag2_py
 pyarrow
 duckdb
+matplotlib
