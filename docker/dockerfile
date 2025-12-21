@@ -23,7 +23,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt install -y iputils-ping
 
 RUN DEBIAN_FRONTEND=noninteractive apt install -y python3-colcon-common-extensions
 
-RUN DEBIAN_FRONTEND=noninteractive apt install -y ros-${ROS_DISTRO}-plotjuggler-ros
+RUN DEBIAN_FRONTEND=noninteractive apt install -y ros-${ROS_DISTRO}-control-toolbox \
+                                                  ros-${ROS_DISTRO}-plotjuggler-ros
 
 RUN python3 -m pip install carla==0.9.16 transforms3d
 

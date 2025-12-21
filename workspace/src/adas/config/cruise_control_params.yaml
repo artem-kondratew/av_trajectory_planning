@@ -4,10 +4,11 @@ adas_node:
     imu_topic: /carla/hero/imu
     control_topic: /carla/hero/vehicle_control_cmd
     tau: 2.0
+    ts: 0.05
     p: 10
     c: 10
     v_ref: 40.0
-    u_limits: [-0.01, 1.0]
-    phi_vals: [0.95, 0.95, 0.95]
-    q_vals: [10., 1., 1.]
+    u_limits: [-0.4, 1.2]
+    phi_vals: [0.6, 0.6, 0.6]
+    q_vals: [20., 1., 1.]
     s: 18.

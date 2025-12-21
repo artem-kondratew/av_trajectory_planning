@@ -14,6 +14,7 @@ struct Limit {
     double min;
     double max;
 
+    Limit() = default;
     Limit(double min, double max) : min{min}, max{max} {}
 };
 

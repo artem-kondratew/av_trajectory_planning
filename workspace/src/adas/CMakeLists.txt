@@ -15,6 +15,7 @@ find_package(OsqpEigen REQUIRED)
 
 find_package(ament_cmake REQUIRED)
 find_package(carla_msgs REQUIRED)
+find_package(control_toolbox REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -35,7 +36,7 @@ target_link_libraries(adas_node
     OsqpEigen::OsqpEigen
 )
 
-ament_target_dependencies(adas_node carla_msgs geometry_msgs rclcpp sensor_msgs std_msgs)
+ament_target_dependencies(adas_node carla_msgs control_toolbox geometry_msgs rclcpp sensor_msgs std_msgs)
 
 install(DIRECTORY
     launch config

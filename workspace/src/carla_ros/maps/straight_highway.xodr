@@ -1,25 +1,24 @@
 <OpenDRIVE>
-  <header revMajor="1" revMinor="4" name="Untitled" version="1" date="2025-12-18T07:49:36.017Z" north="0" south="0" east="0" west="0" vendor="Truevision.ai"></header>
-  <road name="Road1" length="40000" id="1" junction="-1" rule="RHT">
-    <type s="0" type="town">
-      <speed max="120" unit="mph"></speed>
+  <header revMajor="1" revMinor="4" name="Untitled" version="1" date="2025-12-20T10:45:49.730Z" north="0" south="0" east="0" west="0" vendor="Truevision.ai"></header>
+  <road name="Road1" length="10020" id="1" junction="-1" rule="RHT">
+    <type s="0" type="motorway">
+      <speed max="200" unit="mph"></speed>
     </type>
     <link></link>
     <planView>
-      <geometry s="0.0000000000000000e+0" x="0.0000000000000000e+0" y="0.0000000000000000e+0" hdg="0.0000000000000000e+0" length="4.0000000000000000e+4">
+      <geometry s="0.0000000000000000e+0" x="-2.0000000000000000e+1" y="0.0000000000000000e+0" hdg="0.0000000000000000e+0" length="1.0020000000000000e+4">
         <line></line>
       </geometry>
     </planView>
     <elevationProfile>
       <elevation s="0" a="0" b="0" c="0" d="0"></elevation>
-      <elevation s="40000" a="0" b="0" c="0" d="0"></elevation>
+      <elevation s="10020" a="0" b="0" c="0" d="0"></elevation>
     </elevationProfile>
     <lateralProfile>
       <superelevation s="0" a="0" b="0" c="0" d="0"></superelevation>
-      <superelevation s="40000" a="0" b="0" c="0" d="0"></superelevation>
+      <superelevation s="10020" a="0" b="0" c="0" d="0"></superelevation>
     </lateralProfile>
     <lanes>
-      <laneOffset s="0" a="0" b="0" c="0" d="0"></laneOffset>
       <laneOffset s="0" a="0" b="0" c="0" d="0"></laneOffset>
       <laneOffset s="0" a="0" b="0" c="0" d="0"></laneOffset>
       <laneSection s="0">

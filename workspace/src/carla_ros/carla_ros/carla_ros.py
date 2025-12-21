@@ -138,21 +138,9 @@ class CarlaRos(Node):
         vehicle_location = self.vehicle.get_location()
         current_lane = self.map.get_waypoint(vehicle_location, project_to_road=False)
 
-        # get velocity in local frame
-        transform = self.vehicle.get_transform()
-        forward_vec = transform.get_forward_vector()
-        right_vec = transform.get_right_vector()
-        left_vec = carla.Vector3D(-right_vec.x, -right_vec.y, -right_vec.z)
-
         velocity = self.vehicle.get_velocity()
-
-        velocity_forward = velocity.x * forward_vec.x + velocity.y * forward_vec.y + velocity.z * forward_vec.z
-        velocity_left = velocity.x * left_vec.x + velocity.y * left_vec.y + velocity.z * left_vec.z
-
         velocity_msg = Twist()
-        velocity_msg.linear.x = velocity_forward
-        velocity_msg.linear.y = velocity_left
-
+        velocity_msg.linear.x = np.sqrt(velocity.x**2 + velocity.y**2)
         self.velocity_pub.publish(velocity_msg)
 
         if current_lane is None:
@@ -266,6 +254,7 @@ class CarlaRos(Node):
         map_ = world.get_map()
 
         spawn_point = map_.get_spawn_points()[0]
+        spawn_point.location.x -= 20.
         # spawn_point.location.y -= 14.
             
         bp = bp_library.filter(config.get('type'))[0]
