@@ -36,6 +36,9 @@ private:
 
     control_toolbox::Pid pid_;
 
+    double i_trim_scale_;
+    double i_trim_min_;
+
     double ts_;
     double v_ref_;
     
@@ -73,6 +76,13 @@ ADASNode::ADASNode() : Node("adas_node") {
     this->declare_parameter("u_limits", rclcpp::PARAMETER_DOUBLE_ARRAY);
     this->declare_parameter("phi_vals", rclcpp::PARAMETER_DOUBLE_ARRAY);
     this->declare_parameter("q_vals", rclcpp::PARAMETER_DOUBLE_ARRAY);
+    this->declare_parameter("p_term", rclcpp::PARAMETER_DOUBLE);
+    this->declare_parameter("i_term", rclcpp::PARAMETER_DOUBLE);
+    this->declare_parameter("d_term", rclcpp::PARAMETER_DOUBLE);
+    this->declare_parameter("i_min", rclcpp::PARAMETER_DOUBLE);
+    this->declare_parameter("i_max", rclcpp::PARAMETER_DOUBLE);
+    this->declare_parameter("i_trim_scale", rclcpp::PARAMETER_DOUBLE);
+    this->declare_parameter("i_trim_min", rclcpp::PARAMETER_DOUBLE);
 
     std::string host_velocity_topic = this->get_parameter("host_velocity_topic").as_string();
     std::string imu_topic = this->get_parameter("imu_topic").as_string();
@@ -88,6 +98,13 @@ ADASNode::ADASNode() : Node("adas_node") {
     cc::Limit u_limits = vectorToLimit(this->get_parameter("u_limits").as_double_array());
     std::vector<double> phi_vals = this->get_parameter("phi_vals").as_double_array();
     std::vector<double> q_vals = this->get_parameter("q_vals").as_double_array();
+    double p_term = this->get_parameter("p_term").as_double();
+    double i_term = this->get_parameter("i_term").as_double();
+    double d_term = this->get_parameter("d_term").as_double();
+    double i_min = this->get_parameter("i_min").as_double();
+    double i_max = this->get_parameter("i_max").as_double();
+    i_trim_scale_ = this->get_parameter("i_trim_scale").as_double();
+    i_trim_min_ = this->get_parameter("i_trim_min").as_double();
 
     RCLCPP_INFO(this->get_logger(), "host_velocity_topic: '%s'", host_velocity_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "imu_topic: '%s'", imu_topic.c_str());
@@ -103,6 +120,13 @@ ADASNode::ADASNode() : Node("adas_node") {
     RCLCPP_INFO(this->get_logger(), "u_limits: [%lf, %lf] m/s^2", u_limits.min, u_limits.max);
     RCLCPP_INFO(this->get_logger(), "phi_vals: [%lf, %lf, %lf]", phi_vals[0], phi_vals[1], phi_vals[2]);
     RCLCPP_INFO(this->get_logger(), "q_vals: [%lf, %lf, %lf]", q_vals[0], q_vals[1], q_vals[2]);
+    RCLCPP_INFO(this->get_logger(), "p_term: %lf", p_term);
+    RCLCPP_INFO(this->get_logger(), "i_term: %lf", i_term);
+    RCLCPP_INFO(this->get_logger(), "d_term: %lf", d_term);
+    RCLCPP_INFO(this->get_logger(), "i_min: %lf", i_min);
+    RCLCPP_INFO(this->get_logger(), "i_max: %lf", i_max);
+    RCLCPP_INFO(this->get_logger(), "i_trim_scale: %lf", i_trim_scale_);
+    RCLCPP_INFO(this->get_logger(), "i_trim_min: %lf", i_trim_min_);
 
     v_ref_ *= kmh2ms;
 
@@ -114,7 +138,7 @@ ADASNode::ADASNode() : Node("adas_node") {
 
     cruise_controller_ = std::make_unique<cc::CruiseController>(tau, p, c, s, phi_vals, q_vals, u_limits);
 
-    pid_.initPid(0.0, 0.15, 0.0, 0.2, -0.2);
+    pid_.initPid(p_term, i_term, d_term, i_max, i_min);
 
     t_last_ = this->get_clock()->now().seconds();
 }
@@ -150,7 +174,7 @@ void ADASNode::linearVelocityCallback(const geometry_msgs::msg::Twist& msg) {
     e_prev_ = e;
 
     double u_trim = pid_.computeCommand(e, dt_ns);
-    double max_trim = 0.3 * std::max(0.1, std::abs(u_mpc));
+    double max_trim = i_trim_scale_ * std::max(i_trim_min_, std::abs(u_mpc));
     u_trim = std::clamp(u_trim, -max_trim, max_trim);
 
     double u = u_mpc + u_trim;

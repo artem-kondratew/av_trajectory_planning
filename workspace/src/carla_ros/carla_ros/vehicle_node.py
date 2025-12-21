@@ -9,7 +9,9 @@ import rclpy
 
 from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
+from carla_msgs.msg import CarlaEgoVehicleControl as Control
 from geometry_msgs.msg import Twist
+from sensor_msgs.msg import Imu
 from visualization_msgs.msg import Marker, MarkerArray
 
 from .submodules.transform_3d import Transform3D
@@ -25,16 +27,18 @@ class CarlaRos(Node):
         super().__init__('vehicle_node')
 
         parameters = [
-            ('callback_period', 0.05),
-            ('host', ''),
-            ('port', -1),
-            ('json_path', ''),
-            ('id', ''),
-            ('color', ''),
-            ('spawn_point', 0),
-            ('x_offset', 0.0),
-            ('y_offset', 0.0),
-            ('create_markers', True),
+            ('callback_period', rclpy.Parameter.Type.DOUBLE),
+            ('host', rclpy.Parameter.Type.STRING),
+            ('port', rclpy.Parameter.Type.INTEGER),
+            ('json_path', rclpy.Parameter.Type.STRING),
+            ('id', rclpy.Parameter.Type.STRING),
+            ('color', rclpy.Parameter.Type.STRING),
+            ('spawn_point', rclpy.Parameter.Type.INTEGER),
+            ('x_offset', rclpy.Parameter.Type.DOUBLE),
+            ('y_offset', rclpy.Parameter.Type.DOUBLE),
+            ('create_markers', rclpy.Parameter.Type.BOOL),
+            ('gen_imu_pub', rclpy.Parameter.Type.BOOL),
+            ('gen_control_sub', rclpy.Parameter.Type.BOOL),
         ]
 
         self.declare_parameters(namespace='', parameters=parameters)
@@ -49,6 +53,8 @@ class CarlaRos(Node):
         x_offset = self.get_parameter('x_offset').get_parameter_value().double_value
         y_offset = self.get_parameter('y_offset').get_parameter_value().double_value
         self.create_markers = self.get_parameter('create_markers').get_parameter_value().bool_value
+        self.gen_imu_pub = self.get_parameter('gen_imu_pub').get_parameter_value().bool_value
+        self.gen_control_sub = self.get_parameter('gen_control_sub').get_parameter_value().bool_value
 
         self.get_logger().info(f'callback_period: {callback_period}')
         self.get_logger().info(f'host: {host}')
@@ -60,6 +66,8 @@ class CarlaRos(Node):
         self.get_logger().info(f'x_offset: {x_offset}')
         self.get_logger().info(f'y_offset: {y_offset}')
         self.get_logger().info(f'create_markers: {self.create_markers}')
+        self.get_logger().info(f'gen_imu_pub: {self.gen_imu_pub}')
+        self.get_logger().info(f'gen_control_sub: {self.gen_control_sub}')
 
         client = carla.Client(host, port)
         client.set_timeout(10.0)
@@ -78,6 +86,13 @@ class CarlaRos(Node):
 
         if self.create_markers:
             self.marker_pub = self.create_publisher(MarkerArray, f'carla/{self.id}/waypoints', 10)
+
+        if self.gen_imu_pub:
+            self.imu_pub = self.create_publisher(Imu, f'carla/{self.id}/imu', 10)
+            self.world.on_tick(self.on_carla_tick)
+
+        if self.gen_control_sub:
+            self.control_sub = self.create_subscription(Control, f'/carla/{self.id}/vehicle_control_cmd', self.control_callback, 10)
         
     def location_to_list(self, location : carla.Location) -> list:
         return [location.x, location.y, location.z]
@@ -142,7 +157,7 @@ class CarlaRos(Node):
         for i, (lane, color) in enumerate(zip(lanes, colors)):
             lane_local_point = self.waypoint_in_vehicle_frame(lane)
 
-            lane_local_point[1, 0] = -lane_local_point[1, 0]
+            lane_local_point[1, 0] = -lane_local_point[1, 0]  # CARLA (LHS) → ROS (RHS)
             
             marker = self.create_marker(i, lane_local_point, color)
 
@@ -220,6 +235,64 @@ class CarlaRos(Node):
         m.color.a = 1.0
 
         return m
+    
+    def on_carla_tick(self, snapshot: carla.WorldSnapshot):
+        if not self.gen_imu_pub:
+            return
+
+        self.publish_imu(snapshot)
+        
+    def publish_imu(self, snapshot: carla.WorldSnapshot):
+        imu_msg = Imu()
+
+        t = snapshot.timestamp.elapsed_seconds
+        imu_msg.header.stamp.sec = int(t)
+        imu_msg.header.stamp.nanosec = int((t - int(t)) * 1e9)
+        imu_msg.header.frame_id = 'imu'
+
+        rot = self.vehicle.get_transform().rotation
+        roll  = np.deg2rad(rot.roll)
+        pitch = np.deg2rad(rot.pitch)
+        yaw   = np.deg2rad(rot.yaw)
+
+        cy = np.cos(yaw * 0.5)
+        sy = np.sin(yaw * 0.5)
+        cp = np.cos(pitch * 0.5)
+        sp = np.sin(pitch * 0.5)
+        cr = np.cos(roll * 0.5)
+        sr = np.sin(roll * 0.5)
+
+        imu_msg.orientation.w = cr * cp * cy + sr * sp * sy
+        imu_msg.orientation.x = sr * cp * cy - cr * sp * sy
+        imu_msg.orientation.y = cr * sp * cy + sr * cp * sy
+        imu_msg.orientation.z = cr * cp * sy - sr * sp * cy
+
+        ang = self.vehicle.get_angular_velocity()
+        imu_msg.angular_velocity.x = ang.x
+        imu_msg.angular_velocity.y = -ang.y  # CARLA (LHS) → ROS (RHS)
+        imu_msg.angular_velocity.z = ang.z
+
+        acc = self.vehicle.get_acceleration()
+
+        imu_msg.linear_acceleration.x = acc.x
+        imu_msg.linear_acceleration.y = -acc.y
+        imu_msg.linear_acceleration.z = acc.z + 9.81
+
+        self.imu_pub.publish(imu_msg)
+
+
+    def control_callback(self, msg: Control):
+        control = carla.VehicleControl()
+
+        control.throttle = float(msg.throttle)
+        control.steer = float(msg.steer)
+        control.brake = float(msg.brake)
+        control.hand_brake = bool(msg.hand_brake)
+        control.reverse = bool(msg.reverse)
+        control.manual_gear_shift = bool(msg.manual_gear_shift)
+        control.gear = int(msg.gear)
+
+        self.vehicle.apply_control(control)
     
     def setup_vehicle(self, world : carla.World, config, id, color, spawn_point_idx, x_offset, y_offset):
         bp_library = world.get_blueprint_library()

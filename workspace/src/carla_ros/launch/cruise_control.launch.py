@@ -21,17 +21,10 @@ def generate_launch_description():
 
     json_path = DeclareLaunchArgument(
         'json_path',
-        default_value=os.path.join(get_package_share_directory(package_name), 'config', 'stack.json'),
+        default_value=os.path.join(get_package_share_directory(package_name), 'config', 'stack_host.json'),
         description='Path to file with vehicle/sensors setup'
     )
     
-    world_node = Node(
-        package=package_name,
-        executable='carla_ros',
-        parameters=[world_params],
-        output='screen',
-    )
-
     world_node = Node(
         package=package_name,
         executable='world_node',

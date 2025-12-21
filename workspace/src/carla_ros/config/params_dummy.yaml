@@ -1,12 +1,14 @@
-carla_ros:
+/**:
   ros__parameters:
-    dt: 0.05
-    setup_world: false
+    callback_period: 0.05
     host: carla
     port: 2000
     id: dummy
     color: "168,0,27"
     spawn_point: 0
-    x_offset: -50.0
+    x_offset: -30.0
     y_offset: 0.0
+    create_markers: false
+    gen_imu_pub: true
+    gen_control_sub: true
     

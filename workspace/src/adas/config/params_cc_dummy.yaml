@@ -6,11 +6,11 @@
     c: 10
     v_ref: 80.0
     u_limits: [-0.4, 1.2]
-    phi_vals: [0.6, 0.6, 0.6]
-    q_vals: [20., 1., 1.]
+    phi_vals: [0.4, 0.4, 0.4]
+    q_vals: [4., 1., 1.]
     s: 18.
     p_term: 0.0
-    i_term: 0.15
+    i_term: 0.0
     d_term: 0.0
     i_min: -0.2
     i_max: 0.2

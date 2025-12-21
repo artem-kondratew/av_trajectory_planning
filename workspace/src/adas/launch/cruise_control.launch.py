@@ -9,10 +9,18 @@ from launch_ros.actions import Node
 
 package_name = 'adas'
 
-params_file = os.path.join(get_package_share_directory(package_name), 'config', 'params_cc.yaml')
-
 
 def generate_launch_description():
+
+    params_file_arg = DeclareLaunchArgument(
+        'params_file',
+        default_value=os.path.join(
+            get_package_share_directory(package_name),
+            'config',
+            'params_cc.yaml'
+        ),
+        description='Path to cruise control params yaml'
+    )
 
     host_velocity_topic_arg = DeclareLaunchArgument(
         'host_velocity_topic',
@@ -45,7 +53,7 @@ def generate_launch_description():
         name='cruise_control_node',
         output='screen',
         parameters=[
-            params_file,
+            LaunchConfiguration('params_file'),
             {
                 'host_velocity_topic': LaunchConfiguration('host_velocity_topic'),
                 'imu_topic': LaunchConfiguration('imu_topic'),
@@ -57,6 +65,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        params_file_arg,
         host_velocity_topic_arg,
         imu_topic_arg,
         control_topic_arg,
