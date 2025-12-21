@@ -1,4 +1,4 @@
-#include "adas/cruise_controller.hpp"
+#include "adas/cc_mpc.hpp"
 
 #include <iostream>
 

@@ -1,3 +1,0 @@
-/**:
-  ros__parameters:
-    topic_name: /carla/hero/vehicle_control_cmd

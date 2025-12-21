@@ -29,7 +29,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            "carla_ackermann_publisher = manual_ackermann_control.main:main",
+            "manual_ackermann_control = manual_ackermann_control.main:main",
         ],
     },
 )

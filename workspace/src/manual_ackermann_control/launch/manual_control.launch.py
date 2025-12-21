@@ -9,20 +9,32 @@ from launch_ros.actions import Node
 
 package_name = 'manual_ackermann_control'
 
-parameters = [os.path.join(get_package_share_directory(package_name), 'config', 'params.yaml')]
-
 
 def generate_launch_description():
     ld = LaunchDescription()
-    
-    publisher = Node(
-        package=package_name,
-        executable='carla_ackermann_publisher',
-        parameters=[parameters],
-        output='screen',
+
+    input_topic = DeclareLaunchArgument(
+        'input_topic',
+        default_value='/cmd_vel'
+    )
+
+    output_topic = DeclareLaunchArgument(
+        'output_topic',
+        default_value='/carla/hero/vehicle_control_cmd'
     )
     
+    manual_ackermann_control = Node(
+        package=package_name,
+        executable='manual_ackermann_control',
+        output='screen',
+        remappings=[
+            ('input_topic', LaunchConfiguration('input_topic')),
+            ('output_topic', LaunchConfiguration('output_topic')),
+        ]
+    )
     
-    ld.add_action(publisher)
+    ld.add_action(input_topic)
+    ld.add_action(output_topic)
+    ld.add_action(manual_ackermann_control)
     
     return ld

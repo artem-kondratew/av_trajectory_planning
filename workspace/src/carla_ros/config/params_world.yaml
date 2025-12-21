@@ -1,8 +1,9 @@
-carla_ros:
+carla_world_node:
   ros__parameters:
+    dt: 0.05
     # map_name: Town06
     map_name: straight_highway.xodr
     use_custom_map: true
     host: carla
     port: 2000
-    spawn_dummy_vehicle: false
+    

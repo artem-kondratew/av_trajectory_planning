@@ -1,7 +1,5 @@
 {
     "type": "vehicle.audi.tt",
-    "color": "0,0,0",
-    "id": "hero",
     "sensors": [
         {
             "type": "sensor.camera.rgb",

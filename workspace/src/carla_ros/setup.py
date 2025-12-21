@@ -30,7 +30,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            "carla_ros = carla_ros.carla_ros:main",
+            "world_node = carla_ros.world_node:main",
+            "vehicle_node = carla_ros.vehicle_node:main",
         ],
     },
 )

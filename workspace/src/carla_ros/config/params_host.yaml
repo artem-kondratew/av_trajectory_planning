@@ -1,0 +1,12 @@
+/**:
+  ros__parameters:
+    callback_period: 0.05
+    host: carla
+    port: 2000
+    id: hero
+    color: "33,33,33"
+    spawn_point: 0
+    x_offset: -20.0
+    y_offset: 0.0
+    create_markers: true
+    

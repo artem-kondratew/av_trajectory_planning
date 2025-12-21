@@ -21,22 +21,22 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 
-add_executable(adas_node
-    src/adas_node.cpp
-    src/cruise_controller.cpp
+add_executable(cc_node
+    src/cc_mpc.cpp
+    src/cc_node.cpp
 )
 
-target_include_directories(adas_node
+target_include_directories(cc_node
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(adas_node
+target_link_libraries(cc_node
     Eigen3::Eigen
     OsqpEigen::OsqpEigen
 )
 
-ament_target_dependencies(adas_node carla_msgs control_toolbox geometry_msgs rclcpp sensor_msgs std_msgs)
+ament_target_dependencies(cc_node carla_msgs control_toolbox geometry_msgs rclcpp sensor_msgs std_msgs)
 
 install(DIRECTORY
     launch config
@@ -44,7 +44,7 @@ install(DIRECTORY
 )
 
 install(TARGETS
-    adas_node
+    cc_node
     DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -1,5 +1,5 @@
-#ifndef ADAS_CRUISE_CONTROLLER_HPP
-#define ADAS_CRUISE_CONTROLLER_HPP
+#ifndef ADAS_CC_MPC_HPP
+#define ADAS_CC_MPC_HPP
 
 
 #include <optional>
@@ -76,4 +76,4 @@ public:
 }
 
 
-#endif  // ADAS_CRUISE_CONTROLLER_HPP
+#endif  // ADAS_CC_MPC_HPP

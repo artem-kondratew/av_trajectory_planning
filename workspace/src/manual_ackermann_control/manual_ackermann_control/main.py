@@ -8,23 +8,14 @@ from rclpy.node import Node
 from carla_msgs.msg import CarlaEgoVehicleControl
 from geometry_msgs.msg import Twist
 
+
 class CarlaAckermannPublisher(Node):
     def __init__(self):
-        super().__init__('carla_ackermann_publisher')
+        super().__init__('manual_ackermann_controller')
 
-        parameters = [
-            ('topic_name', ''),
-        ]
+        self.create_subscription(Twist, 'input_topic', self.callback, 10)
 
-        self.declare_parameters(namespace='', parameters=parameters)
-
-        topic_name = self.get_parameter('topic_name').get_parameter_value().string_value
-
-        self.get_logger().info(f'topic_name: {topic_name}')
-
-        self.create_subscription(Twist, '/cmd_vel', self.callback, 10)
-
-        self.publisher_ = self.create_publisher(CarlaEgoVehicleControl, topic_name, 10)
+        self.publisher_ = self.create_publisher(CarlaEgoVehicleControl, 'output_topic', 10)
 
         self.callback(Twist())
 
@@ -68,7 +59,3 @@ def main(args=None):
     finally:
         node.destroy_node()
         rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()

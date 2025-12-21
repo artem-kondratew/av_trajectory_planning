@@ -15,7 +15,7 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <std_msgs/msg/float64.hpp>
 
-#include "adas/cruise_controller.hpp"
+#include "adas/cc_mpc.hpp"
 
 
 using namespace std::chrono_literals;
@@ -59,9 +59,11 @@ private:
 
 ADASNode::ADASNode() : Node("adas_node") {
     this->declare_parameter("allow_driving", false);
-    this->declare_parameter("local_velocity_topic", rclcpp::PARAMETER_STRING);
+    this->declare_parameter("host_velocity_topic", rclcpp::PARAMETER_STRING);
     this->declare_parameter("imu_topic", rclcpp::PARAMETER_STRING);
     this->declare_parameter("control_topic", rclcpp::PARAMETER_STRING);
+    this->declare_parameter("v_ref_topic", rclcpp::PARAMETER_STRING);
+    this->declare_parameter("y_vector_topic", rclcpp::PARAMETER_STRING);
     this->declare_parameter("tau", rclcpp::PARAMETER_DOUBLE);
     this->declare_parameter("ts", rclcpp::PARAMETER_DOUBLE);
     this->declare_parameter("p", rclcpp::PARAMETER_INTEGER);
@@ -72,9 +74,11 @@ ADASNode::ADASNode() : Node("adas_node") {
     this->declare_parameter("phi_vals", rclcpp::PARAMETER_DOUBLE_ARRAY);
     this->declare_parameter("q_vals", rclcpp::PARAMETER_DOUBLE_ARRAY);
 
-    std::string local_velocity_topic = this->get_parameter("local_velocity_topic").as_string();
+    std::string host_velocity_topic = this->get_parameter("host_velocity_topic").as_string();
     std::string imu_topic = this->get_parameter("imu_topic").as_string();
     std::string control_topic = this->get_parameter("control_topic").as_string();
+    std::string v_ref_topic = this->get_parameter("v_ref_topic").as_string();
+    std::string y_vector_topic = this->get_parameter("y_vector_topic").as_string();
     double tau = this->get_parameter("tau").as_double();
     ts_ = this->get_parameter("ts").as_double();
     int p = this->get_parameter("p").as_int();
@@ -85,9 +89,11 @@ ADASNode::ADASNode() : Node("adas_node") {
     std::vector<double> phi_vals = this->get_parameter("phi_vals").as_double_array();
     std::vector<double> q_vals = this->get_parameter("q_vals").as_double_array();
 
-    RCLCPP_INFO(this->get_logger(), "local_velocity_topic: '%s'", local_velocity_topic.c_str());
+    RCLCPP_INFO(this->get_logger(), "host_velocity_topic: '%s'", host_velocity_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "imu_topic: '%s'", imu_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "control_topic: '%s'", control_topic.c_str());
+    RCLCPP_INFO(this->get_logger(), "v_ref_topic: '%s'", v_ref_topic.c_str());
+    RCLCPP_INFO(this->get_logger(), "y_vector_topic: '%s'", y_vector_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "tau: %lf s", tau);
     RCLCPP_INFO(this->get_logger(), "tau: %lf s", ts_);
     RCLCPP_INFO(this->get_logger(), "p: %d", p);
@@ -100,11 +106,11 @@ ADASNode::ADASNode() : Node("adas_node") {
 
     v_ref_ *= kmh2ms;
 
-    linear_velocity_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(local_velocity_topic, 10, std::bind(&ADASNode::linearVelocityCallback, this, _1));
+    linear_velocity_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(host_velocity_topic, 10, std::bind(&ADASNode::linearVelocityCallback, this, _1));
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(imu_topic, 10, std::bind(&ADASNode::imuCallback, this, _1));
     control_pub_ = this->create_publisher<carla_msgs::msg::CarlaEgoVehicleControl>(control_topic, 10);
-    v_ref_pub_ = this->create_publisher<std_msgs::msg::Float64>("cruise_controller/v_ref", 10);
-    y_pub_ = this->create_publisher<geometry_msgs::msg::Vector3>("cruise_controller/y_vector", 10);
+    v_ref_pub_ = this->create_publisher<std_msgs::msg::Float64>(v_ref_topic, 10);
+    y_pub_ = this->create_publisher<geometry_msgs::msg::Vector3>(y_vector_topic, 10);
 
     cruise_controller_ = std::make_unique<cc::CruiseController>(tau, p, c, s, phi_vals, q_vals, u_limits);
 
