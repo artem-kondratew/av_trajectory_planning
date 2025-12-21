@@ -24,7 +24,7 @@ using std::placeholders::_1;
 namespace cc = cruise_control;
 
 
-class ADASNode : public rclcpp::Node {
+class CruiseControlNode : public rclcpp::Node {
 private:
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr linear_velocity_sub_;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
@@ -50,7 +50,7 @@ private:
     static constexpr double kmh2ms = 1 / ms2kmh;
 
 public:
-    ADASNode();
+    CruiseControlNode();
 
 private:
     void linearVelocityCallback(const geometry_msgs::msg::Twist& msg);
@@ -60,7 +60,7 @@ private:
 };
 
 
-ADASNode::ADASNode() : Node("adas_node") {
+CruiseControlNode::CruiseControlNode() : Node("cruise_control_node") {
     this->declare_parameter("allow_driving", false);
     this->declare_parameter("host_velocity_topic", rclcpp::PARAMETER_STRING);
     this->declare_parameter("imu_topic", rclcpp::PARAMETER_STRING);
@@ -130,8 +130,8 @@ ADASNode::ADASNode() : Node("adas_node") {
 
     v_ref_ *= kmh2ms;
 
-    linear_velocity_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(host_velocity_topic, 10, std::bind(&ADASNode::linearVelocityCallback, this, _1));
-    imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(imu_topic, 10, std::bind(&ADASNode::imuCallback, this, _1));
+    linear_velocity_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(host_velocity_topic, 10, std::bind(&CruiseControlNode::linearVelocityCallback, this, _1));
+    imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(imu_topic, 10, std::bind(&CruiseControlNode::imuCallback, this, _1));
     control_pub_ = this->create_publisher<carla_msgs::msg::CarlaEgoVehicleControl>(control_topic, 10);
     v_ref_pub_ = this->create_publisher<std_msgs::msg::Float64>(v_ref_topic, 10);
     y_pub_ = this->create_publisher<geometry_msgs::msg::Vector3>(y_vector_topic, 10);
@@ -144,7 +144,7 @@ ADASNode::ADASNode() : Node("adas_node") {
 }
 
 
-void ADASNode::linearVelocityCallback(const geometry_msgs::msg::Twist& msg) {
+void CruiseControlNode::linearVelocityCallback(const geometry_msgs::msg::Twist& msg) {
     v_ref_ = this->get_parameter("v_ref").as_double() * kmh2ms;
 
     if (!this->get_parameter("allow_driving").as_bool()) {
@@ -209,14 +209,14 @@ void ADASNode::linearVelocityCallback(const geometry_msgs::msg::Twist& msg) {
     t_last_ = t;
 }
 
-void ADASNode::imuCallback(const sensor_msgs::msg::Imu& msg) {
+void CruiseControlNode::imuCallback(const sensor_msgs::msg::Imu& msg) {
     last_imu_msg_ = msg;
 }
 
 
 int main(int argc, char * argv[]) {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<ADASNode>()); 
+    rclcpp::spin(std::make_shared<CruiseControlNode>()); 
     rclcpp::shutdown();
 
     return 0;
