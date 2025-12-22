@@ -26,7 +26,22 @@ add_executable(cc_node
     src/cc_node.cpp
 )
 
+add_executable(acc_node
+    src/cc_mpc.cpp
+    src/acc_mpc.cpp
+    src/acc_node.cpp
+)
+
+add_executable(control_wrapper
+    src/control_wrapper.cpp
+)
+
 target_include_directories(cc_node
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_include_directories(acc_node
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
@@ -36,7 +51,14 @@ target_link_libraries(cc_node
     OsqpEigen::OsqpEigen
 )
 
+target_link_libraries(acc_node
+    Eigen3::Eigen
+    OsqpEigen::OsqpEigen
+)
+
 ament_target_dependencies(cc_node carla_msgs control_toolbox geometry_msgs rclcpp sensor_msgs std_msgs)
+ament_target_dependencies(acc_node carla_msgs control_toolbox geometry_msgs rclcpp sensor_msgs std_msgs)
+ament_target_dependencies(control_wrapper carla_msgs rclcpp std_msgs)
 
 install(DIRECTORY
     launch config
@@ -45,6 +67,8 @@ install(DIRECTORY
 
 install(TARGETS
     cc_node
+    acc_node
+    control_wrapper
     DESTINATION lib/${PROJECT_NAME}
 )
 

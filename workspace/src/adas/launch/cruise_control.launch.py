@@ -12,6 +12,16 @@ package_name = 'adas'
 
 def generate_launch_description():
 
+    log_level = DeclareLaunchArgument(
+        'log_level',
+        default_value='info'
+    )
+
+    cc_node_name = DeclareLaunchArgument(
+        'cc_node_name',
+        default_value='cc_node'
+    )
+
     params_file_arg = DeclareLaunchArgument(
         'params_file',
         default_value=os.path.join(
@@ -19,12 +29,11 @@ def generate_launch_description():
             'config',
             'params_cc.yaml'
         ),
-        description='Path to cruise control params yaml'
     )
 
     host_velocity_topic_arg = DeclareLaunchArgument(
         'host_velocity_topic',
-        default_value='/carla/hero/local_velocity'
+        default_value='/carla/hero/velocity'
     )
 
     imu_topic_arg = DeclareLaunchArgument(
@@ -47,11 +56,12 @@ def generate_launch_description():
         default_value='/carla/hero/y_vector'
     )
 
-    adas_node = Node(
+    cc_node = Node(
         package=package_name,
         executable='cc_node',
-        name='cruise_control_node',
+        name=LaunchConfiguration('cc_node_name'),
         output='screen',
+        arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
         parameters=[
             LaunchConfiguration('params_file'),
             {
@@ -64,12 +74,16 @@ def generate_launch_description():
         ],
     )
 
-    return LaunchDescription([
-        params_file_arg,
-        host_velocity_topic_arg,
-        imu_topic_arg,
-        control_topic_arg,
-        v_ref_topic_arg,
-        y_vector_topic_arg,
-        adas_node,
-    ])
+    ld = LaunchDescription()
+
+    ld.add_action(log_level)
+    ld.add_action(cc_node_name)
+    ld.add_action(params_file_arg)
+    ld.add_action(host_velocity_topic_arg)
+    ld.add_action(imu_topic_arg)
+    ld.add_action(control_topic_arg)
+    ld.add_action(v_ref_topic_arg)
+    ld.add_action(y_vector_topic_arg)
+    ld.add_action(cc_node)
+
+    return ld

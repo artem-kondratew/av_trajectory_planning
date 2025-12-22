@@ -1,5 +1,5 @@
-#ifndef ADAS_CC_MPC_HPP
-#define ADAS_CC_MPC_HPP
+#ifndef ADAS_ACC_MPC_HPP
+#define ADAS_ACC_MPC_HPP
 
 
 #include <optional>
@@ -10,17 +10,19 @@
 #include "adas/limit.hpp"
 
 
-namespace cruise_control {
+namespace adaptive_cruise_control {
 
-class CruiseController {
+class AdaptiveCruiseController {
 private:
     const double tau;
     const int p;
     const int c;
     const double s;
+    const double d0;
+    const double th;
 
-    static constexpr int n_in = 3;
-    static constexpr int n_out = 3;
+    static constexpr int n_in = 5;
+    static constexpr int n_out = 4;
 
     Eigen::Matrix<double, n_in, n_in> A;
     Eigen::Vector<double, n_in> B;
@@ -54,20 +56,22 @@ private:
     OsqpEigen::Solver solver;
      
 public:
-    CruiseController(
+    AdaptiveCruiseController(
         double tau,
         int p,
         int c,
         double s,
+        double d0,
+        double th,
         const std::vector<double>& phi_vals,
         const std::vector<double>& q_vals,
         const Limit& u_limits
     );
 
-    std::pair<double, const Eigen::Vector<double, n_out>> calculate_control(double dt, double v_ref, double v, double a);
+    std::pair<double, const Eigen::Vector<double, n_out>> calculate_control(double ts, double dx, double v, double v_rel, double a);
 };
 
 }
 
 
-#endif  // ADAS_CC_MPC_HPP
+#endif  // ADAS_ACC_MPC_HPP

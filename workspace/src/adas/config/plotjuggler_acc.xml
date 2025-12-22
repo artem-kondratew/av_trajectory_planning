@@ -1,23 +1,23 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <root>
- <tabbed_widget name="Main Window" parent="main_window">
-  <Tab tab_name="tab1" containers="1">
+ <tabbed_widget parent="main_window" name="Main Window">
+  <Tab containers="1" tab_name="tab1">
    <Container>
     <DockSplitter orientation="-" sizes="1" count="1">
      <DockArea name="...">
-      <plot flip_x="false" mode="TimeSeries" flip_y="false" style="Lines">
-       <range top="120.000000" bottom="0.000000" left="2331.388730" right="3287.257957"/>
+      <plot flip_x="false" style="Lines" flip_y="false" mode="TimeSeries">
+       <range bottom="0.000000" left="0.000000" top="120.000000" right="1838.143031"/>
        <limitY min="0" max="120"/>
-       <curve name="/carla/hero/dist/data" color="#1f77b4"/>
-       <curve name="/carla/hero/dist_ref/data" color="#d62728"/>
-       <curve name="/carla/hero/velocity/data" color="#1ac938">
+       <curve color="#1f77b4" name="/carla/hero/dist/data"/>
+       <curve color="#d62728" name="/carla/hero/dist_ref/data"/>
+       <curve color="#1ac938" name="/carla/hero/velocity/data">
         <transform alias="/carla/hero/velocity/data[Scale/Offset]" name="Scale/Offset">
-         <options value_offset="0.0" value_scale="3.6" time_offset="0.0"/>
+         <options value_scale="3.6" value_offset="0.0" time_offset="0.0"/>
         </transform>
        </curve>
-       <curve name="/carla/dummy/velocity/data" color="#ff7f0e">
+       <curve color="#ff7f0e" name="/carla/dummy/velocity/data">
         <transform alias="/carla/dummy/velocity/data[Scale/Offset]" name="Scale/Offset">
-         <options value_offset="0.0" value_scale="3.6" time_offset="0.0"/>
+         <options value_scale="3.6" value_offset="0.0" time_offset="0.0"/>
         </transform>
        </curve>
       </plot>
@@ -32,7 +32,7 @@
  <!-- - - - - - - - - - - - - - - -->
  <Plugins>
   <plugin ID="DataLoad CSV">
-   <parameters time_axis="" delimiter="0"/>
+   <parameters delimiter="0" time_axis=""/>
   </plugin>
   <plugin ID="DataLoad MCAP"/>
   <plugin ID="DataLoad ROS2 bags">
@@ -50,7 +50,7 @@
    <max_array_size value="100"/>
    <boolean_strings_to_number value="true"/>
    <remove_suffix_from_strings value="true"/>
-   <selected_topics value="/carla/dummy/velocity;/carla/hero/velocity;/carla/hero/dist;/carla/hero/dist_ref"/>
+   <selected_topics value="/carla/dummy/velocity;/carla/hero/velocity"/>
   </plugin>
   <plugin ID="UDP Server"/>
   <plugin ID="WebSocket Server"/>

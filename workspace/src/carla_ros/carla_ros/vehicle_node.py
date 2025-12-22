@@ -10,8 +10,9 @@ import rclpy
 from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
 from carla_msgs.msg import CarlaEgoVehicleControl as Control
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Vector3
 from sensor_msgs.msg import Imu
+from std_msgs.msg import Float64
 from visualization_msgs.msg import Marker, MarkerArray
 
 from .submodules.transform_3d import Transform3D
@@ -82,7 +83,8 @@ class CarlaRos(Node):
 
         self.create_timer(callback_period, self.callback)
 
-        self.velocity_pub = self.create_publisher(Twist, f'carla/{self.id}/local_velocity', 10)
+        self.position_pub = self.create_publisher(Vector3, f'carla/{self.id}/position', 10)
+        self.velocity_pub = self.create_publisher(Float64, f'carla/{self.id}/velocity', 10)
 
         if self.create_markers:
             self.marker_pub = self.create_publisher(MarkerArray, f'carla/{self.id}/waypoints', 10)
@@ -120,15 +122,22 @@ class CarlaRos(Node):
 
     def callback(self):
         vehicle_location = self.vehicle.get_location()
-        current_lane = self.map.get_waypoint(vehicle_location, project_to_road=False)
+
+        position_msg = Vector3()
+        position_msg.x = vehicle_location.x
+        position_msg.y = vehicle_location.y
+        position_msg.z = vehicle_location.z
+        self.position_pub.publish(position_msg)
 
         velocity = self.vehicle.get_velocity()
-        velocity_msg = Twist()
-        velocity_msg.linear.x = np.sqrt(velocity.x**2 + velocity.y**2)
+        velocity_msg = Float64()
+        velocity_msg.data = np.sqrt(velocity.x**2 + velocity.y**2)
         self.velocity_pub.publish(velocity_msg)
 
         if not self.create_markers:
             return
+        
+        current_lane = self.map.get_waypoint(vehicle_location, project_to_road=False)
 
         if current_lane is None:
             return

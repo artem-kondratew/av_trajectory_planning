@@ -1,17 +1,22 @@
-#include "adas/cc_mpc.hpp"
+#include "adas/acc_mpc.hpp"
 
 #include <iostream>
 
 #include <unsupported/Eigen/MatrixFunctions>
 
 
-namespace cruise_control {
+namespace adaptive_cruise_control {
 
-CruiseController::CruiseController(
+using ACC = AdaptiveCruiseController;
+
+
+ACC::AdaptiveCruiseController(
     double tau,
     int p,
     int c,
     double s,
+    double d0,
+    double th,
     const std::vector<double>& phi_vals,
     const std::vector<double>& q_vals,
     const Limit& u_limits
@@ -20,9 +25,15 @@ CruiseController::CruiseController(
     , p{p}
     , c{c}
     , s{s}
+    , d0{d0}
+    , th{th}
     , u_limits{u_limits} {
 
-    C = Eigen::Matrix<double, n_out, n_in>::Identity();
+    C = Eigen::Matrix<double, n_out, n_in>::Zero();
+    C(0, 0) = 1.0;
+    C(0, 1) = -th;
+    C.block<3, 3>(1, 2) = Eigen::Matrix<double, 3, 3>::Identity();
+
     H = Eigen::Matrix<double, n_in, n_in>::Identity();
 
     F = C * H;
@@ -69,11 +80,11 @@ CruiseController::CruiseController(
 }
 
 
-std::pair<double, const Eigen::Vector<double, CruiseController::n_out>> CruiseController::calculate_control(double ts, double v_ref, double v, double a) {
+std::pair<double, const Eigen::Vector<double, ACC::n_out>> ACC::calculate_control(double ts, double dx, double v, double v_rel, double a) {
     double j = (a - a_prev) / ts;
     j = 0;
 
-    Eigen::Vector<double, n_in> x{v, a, j};
+    Eigen::Vector<double, n_in> x{dx, v, v_rel, a, j};
 
     Eigen::Vector<double, n_in> ex;
     if (!x_predicted) {
@@ -84,14 +95,16 @@ std::pair<double, const Eigen::Vector<double, CruiseController::n_out>> CruiseCo
     }
 
     A = Eigen::Matrix<double, n_in, n_in>{
-        {1,  ts,         0},
-        {0,  1 - ts/tau, 0},
-        {0, -1/tau,      0}
+        {1, 0, ts, -0.5*ts*ts, 0},
+        {0, 1,  0,         ts, 0},
+        {0, 0,  1,        -ts, 0},
+        {0, 0,  0,   1-ts/tau, 0},
+        {0, 0,  0,     -1./tau, 0}
     };
 
-    B = Eigen::Vector<double, n_in>{0, ts/tau, 1/tau};
+    B = Eigen::Vector<double, n_in>{0, 0, 0, ts/tau, 1/tau};
 
-    Z = Eigen::Vector<double, n_out>{v_ref, 0, 0};
+    Z = Eigen::Vector<double, n_out>{d0, 0, 0, 0};
 
     A_hat = Eigen::MatrixXd::Zero(A.rows() * p, A.cols());
     C_hat = Eigen::MatrixXd::Zero(C.rows() * p, C.cols());

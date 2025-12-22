@@ -2,6 +2,7 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include <Eigen/Dense>
@@ -10,7 +11,6 @@
 
 #include <carla_msgs/msg/carla_ego_vehicle_control.hpp>
 #include <control_toolbox/pid.hpp>
-#include <geometry_msgs/msg/twist.hpp>
 #include <geometry_msgs/msg/vector3.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <std_msgs/msg/float64.hpp>
@@ -26,7 +26,7 @@ namespace cc = cruise_control;
 
 class CruiseControlNode : public rclcpp::Node {
 private:
-    rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr linear_velocity_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr linear_velocity_sub_;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
     rclcpp::Publisher<carla_msgs::msg::CarlaEgoVehicleControl>::SharedPtr control_pub_;
     rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr v_ref_pub_;
@@ -53,14 +53,14 @@ public:
     CruiseControlNode();
 
 private:
-    void linearVelocityCallback(const geometry_msgs::msg::Twist& msg);
+    void linearVelocityCallback(const std_msgs::msg::Float64& msg);
     void imuCallback(const sensor_msgs::msg::Imu& msg);
 
-    cc::Limit vectorToLimit(const std::vector<double>& vec) {return cc::Limit{vec[0], vec[1]};}
+    Limit vectorToLimit(const std::vector<double>& vec) {return Limit{vec[0], vec[1]};}
 };
 
 
-CruiseControlNode::CruiseControlNode() : Node("cruise_control_node") {
+CruiseControlNode::CruiseControlNode() : Node("cc_node") {
     this->declare_parameter("allow_driving", false);
     this->declare_parameter("host_velocity_topic", rclcpp::PARAMETER_STRING);
     this->declare_parameter("imu_topic", rclcpp::PARAMETER_STRING);
@@ -95,7 +95,7 @@ CruiseControlNode::CruiseControlNode() : Node("cruise_control_node") {
     int c = this->get_parameter("c").as_int();
     double s = this->get_parameter("s").as_double();
     v_ref_ = this->get_parameter("v_ref").as_double();
-    cc::Limit u_limits = vectorToLimit(this->get_parameter("u_limits").as_double_array());
+    Limit u_limits = vectorToLimit(this->get_parameter("u_limits").as_double_array());
     std::vector<double> phi_vals = this->get_parameter("phi_vals").as_double_array();
     std::vector<double> q_vals = this->get_parameter("q_vals").as_double_array();
     double p_term = this->get_parameter("p_term").as_double();
@@ -130,7 +130,7 @@ CruiseControlNode::CruiseControlNode() : Node("cruise_control_node") {
 
     v_ref_ *= kmh2ms;
 
-    linear_velocity_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(host_velocity_topic, 10, std::bind(&CruiseControlNode::linearVelocityCallback, this, _1));
+    linear_velocity_sub_ = this->create_subscription<std_msgs::msg::Float64>(host_velocity_topic, 10, std::bind(&CruiseControlNode::linearVelocityCallback, this, _1));
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(imu_topic, 10, std::bind(&CruiseControlNode::imuCallback, this, _1));
     control_pub_ = this->create_publisher<carla_msgs::msg::CarlaEgoVehicleControl>(control_topic, 10);
     v_ref_pub_ = this->create_publisher<std_msgs::msg::Float64>(v_ref_topic, 10);
@@ -144,7 +144,7 @@ CruiseControlNode::CruiseControlNode() : Node("cruise_control_node") {
 }
 
 
-void CruiseControlNode::linearVelocityCallback(const geometry_msgs::msg::Twist& msg) {
+void CruiseControlNode::linearVelocityCallback(const std_msgs::msg::Float64& msg) {
     v_ref_ = this->get_parameter("v_ref").as_double() * kmh2ms;
 
     if (!this->get_parameter("allow_driving").as_bool()) {
@@ -156,7 +156,7 @@ void CruiseControlNode::linearVelocityCallback(const geometry_msgs::msg::Twist& 
     double t = this->get_clock()->now().seconds();
     double dt = t - t_last_;
 
-    double v = msg.linear.x;
+    double v = msg.data;
 
     double a = last_imu_msg_.linear_acceleration.x;
 
@@ -190,7 +190,7 @@ void CruiseControlNode::linearVelocityCallback(const geometry_msgs::msg::Twist& 
 
     control_pub_->publish(control_msg);
 
-    RCLCPP_INFO(
+    RCLCPP_DEBUG(
         get_logger(),
         "e=%.3f u_mpc=%.3f u_trim=%.3f u=%.3f thr=%.3f br=%.3f",
         e, u_mpc, u_trim, u, control_msg.throttle, control_msg.brake

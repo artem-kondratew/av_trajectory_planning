@@ -17,12 +17,15 @@ rviz2_config = os.path.join(get_package_share_directory(package_name), 'config',
 
 
 def generate_launch_description():
-    ld = LaunchDescription()
+
+    log_level = DeclareLaunchArgument(
+        'log_level',
+        default_value='info'
+    )
 
     json_path = DeclareLaunchArgument(
         'json_path',
         default_value=os.path.join(get_package_share_directory(package_name), 'config', 'stack_host.json'),
-        description='Path to file with vehicle/sensors setup'
     )
     
     world_node = Node(
@@ -61,8 +64,14 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             [os.path.join(get_package_share_directory('adas'), 'launch', 'cruise_control.launch.py')]
         ),
+        launch_arguments={
+            'log_level': LaunchConfiguration('log_level'),
+        }.items()
     )
+
+    ld = LaunchDescription()
     
+    ld.add_action(log_level)
     ld.add_action(json_path)
     ld.add_action(world_node)
     ld.add_action(host_node)

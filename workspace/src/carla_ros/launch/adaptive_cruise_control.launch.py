@@ -18,18 +18,20 @@ rviz2_config = os.path.join(get_package_share_directory(package_name), 'config',
 
 
 def generate_launch_description():
-    ld = LaunchDescription()
+    
+    log_level = DeclareLaunchArgument(
+        'log_level',
+        default_value='info'
+    )
 
     json_host = DeclareLaunchArgument(
         'json_host',
         default_value=os.path.join(get_package_share_directory(package_name), 'config', 'stack_host.json'),
-        description='Path to file with vehicle/sensors setup'
     )
 
     json_dummy = DeclareLaunchArgument(
         'json_dummy',
         default_value=os.path.join(get_package_share_directory(package_name), 'config', 'stack_dummy.json'),
-        description='Path to file with vehicle/sensors setup'
     )
     
     world_node = Node(
@@ -53,9 +55,6 @@ def generate_launch_description():
         name='carla_dummy_node',
         parameters=[dummy_params, {'json_path': LaunchConfiguration('json_dummy')}],
         output='screen',
-        # remappings=[
-        #     ('/carla//back_viewer/camera_info', '/carla/dummy/back_viewer/camera_info')
-        # ]
     )
 
     rviz2 = Node(
@@ -85,21 +84,37 @@ def generate_launch_description():
         }.items()
     )
 
-    cc_node = IncludeLaunchDescription(
+    cc_node_dummy = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             [os.path.join(get_package_share_directory('adas'), 'launch', 'cruise_control.launch.py')]
         ),
         launch_arguments=
             {
+                'log_level': LaunchConfiguration('log_level'),
                 'params_file': os.path.join(get_package_share_directory('adas'), 'config', 'params_cc_dummy.yaml'),
-                'host_velocity_topic': '/carla/dummy/local_velocity',
+                'cc_node_name': 'cc_node_dummy',
+                'host_velocity_topic': '/carla/dummy/velocity',
                 'imu_topic': '/carla/dummy/imu',
                 'control_topic': '/carla/dummy/vehicle_control_cmd',
                 'v_ref_topic': '/carla/dummy/v_ref',
                 'y_vector_topic': '/carla/dummy/y_vector',
             }.items()
     )
+
+    # acc_nodes = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(
+    #         [os.path.join(get_package_share_directory('adas'), 'launch', 'adaptive_cruise_control.launch.py')]
+    #     ),
+    #     launch_arguments=
+    #         {
+    #             'params_file': os.path.join(get_package_share_directory('adas'), 'config', 'params_acc.yaml'),
+    #             'cc_node_name': 'cc_node',
+    #         }.items()
+    # )
+
+    ld = LaunchDescription()
     
+    ld.add_action(log_level)
     ld.add_action(json_host)
     ld.add_action(json_dummy)
     ld.add_action(world_node)
@@ -108,6 +123,7 @@ def generate_launch_description():
     ld.add_action(rviz2)
     ld.add_action(manual_ackermann_control_host)
     ld.add_action(manual_ackermann_control_dummy)
-    ld.add_action(cc_node)
+    ld.add_action(cc_node_dummy)
+    # ld.add_action(acc_nodes)
     
     return ld
