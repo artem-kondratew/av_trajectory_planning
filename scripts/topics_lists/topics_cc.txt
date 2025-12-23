@@ -1,0 +1,5 @@
+/carla/hero/vehicle_control_cmd carla_msgs/msg/CarlaEgoVehicleControl
+/carla/hero/v_ref               std_msgs/msg/Float64
+/carla/hero/y_vector            geometry_msgs/msg/Vector3
+/carla/hero/velocity            std_msgs/msg/Float64
+/carla/hero/imu                 sensor_msgs/msg/Imu

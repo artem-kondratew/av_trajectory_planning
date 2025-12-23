@@ -7,7 +7,6 @@ import numpy as np
 import carla
 import rclpy
 
-from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
 from carla_msgs.msg import CarlaEgoVehicleControl as Control
 from geometry_msgs.msg import Vector3
@@ -23,7 +22,7 @@ GREEN = (0.0, 1.0, 0.0)
 BLUE = (0.0, 0.0, 1.0)
 
 
-class CarlaRos(Node):
+class VehicleNode(Node):
     def __init__(self):
         super().__init__('vehicle_node')
 
@@ -38,8 +37,9 @@ class CarlaRos(Node):
             ('x_offset', rclpy.Parameter.Type.DOUBLE),
             ('y_offset', rclpy.Parameter.Type.DOUBLE),
             ('create_markers', rclpy.Parameter.Type.BOOL),
-            ('gen_imu_pub', rclpy.Parameter.Type.BOOL),
-            ('gen_control_sub', rclpy.Parameter.Type.BOOL),
+            ('generate_imu_pub', rclpy.Parameter.Type.BOOL),
+            ('generate_control_sub', rclpy.Parameter.Type.BOOL),
+            ('fix_y', rclpy.Parameter.Type.BOOL),
         ]
 
         self.declare_parameters(namespace='', parameters=parameters)
@@ -54,8 +54,9 @@ class CarlaRos(Node):
         x_offset = self.get_parameter('x_offset').get_parameter_value().double_value
         y_offset = self.get_parameter('y_offset').get_parameter_value().double_value
         self.create_markers = self.get_parameter('create_markers').get_parameter_value().bool_value
-        self.gen_imu_pub = self.get_parameter('gen_imu_pub').get_parameter_value().bool_value
-        self.gen_control_sub = self.get_parameter('gen_control_sub').get_parameter_value().bool_value
+        self.generate_imu_pub = self.get_parameter('generate_imu_pub').get_parameter_value().bool_value
+        self.generate_control_sub = self.get_parameter('generate_control_sub').get_parameter_value().bool_value
+        self.fix_y = self.get_parameter('fix_y').get_parameter_value().bool_value
 
         self.get_logger().info(f'callback_period: {callback_period}')
         self.get_logger().info(f'host: {host}')
@@ -67,8 +68,9 @@ class CarlaRos(Node):
         self.get_logger().info(f'x_offset: {x_offset}')
         self.get_logger().info(f'y_offset: {y_offset}')
         self.get_logger().info(f'create_markers: {self.create_markers}')
-        self.get_logger().info(f'gen_imu_pub: {self.gen_imu_pub}')
-        self.get_logger().info(f'gen_control_sub: {self.gen_control_sub}')
+        self.get_logger().info(f'generate_imu_pub: {self.generate_imu_pub}')
+        self.get_logger().info(f'generate_control_sub: {self.generate_control_sub}')
+        self.get_logger().info(f'fix_y: {self.fix_y}')
 
         client = carla.Client(host, port)
         client.set_timeout(10.0)
@@ -89,11 +91,12 @@ class CarlaRos(Node):
         if self.create_markers:
             self.marker_pub = self.create_publisher(MarkerArray, f'carla/{self.id}/waypoints', 10)
 
-        if self.gen_imu_pub:
+        if self.generate_imu_pub:
             self.imu_pub = self.create_publisher(Imu, f'carla/{self.id}/imu', 10)
-            self.world.on_tick(self.on_carla_tick)
 
-        if self.gen_control_sub:
+        self.world.on_tick(self.on_carla_tick)
+
+        if self.generate_control_sub:
             self.control_sub = self.create_subscription(Control, f'/carla/{self.id}/vehicle_control_cmd', self.control_callback, 10)
         
     def location_to_list(self, location : carla.Location) -> list:
@@ -246,10 +249,13 @@ class CarlaRos(Node):
         return m
     
     def on_carla_tick(self, snapshot: carla.WorldSnapshot):
-        if not self.gen_imu_pub:
-            return
+        if self.generate_imu_pub:
+            self.publish_imu(snapshot)
 
-        self.publish_imu(snapshot)
+        if self.fix_y:
+            tf = self.vehicle.get_transform()
+            tf.location.y = self.fixed_y
+            self.vehicle.set_transform(tf)
         
     def publish_imu(self, snapshot: carla.WorldSnapshot):
         imu_msg = Imu()
@@ -310,6 +316,9 @@ class CarlaRos(Node):
         spawn_point = map.get_spawn_points()[spawn_point_idx]
         spawn_point.location.x += x_offset
         spawn_point.location.y += y_offset
+        
+        if self.fix_y:
+            self.fixed_y = spawn_point.location.y
             
         bp = bp_library.filter(config.get('type'))[0]
         bp.set_attribute('color', color)
@@ -337,15 +346,10 @@ class CarlaRos(Node):
                 rotation=carla.Rotation(roll=sensor['spawn_point']['roll'], pitch=-sensor['spawn_point']['pitch'], yaw=-sensor['spawn_point']['yaw'])
             )
 
-            sensors.append(
-                world.spawn_actor(
-                    bp,
-                    wp,
-                    attach_to=vehicle
-                )
-            )
+            actor = world.spawn_actor(bp, wp, attach_to=vehicle)
+            actor.enable_for_ros()
 
-            sensors[-1].enable_for_ros()
+            sensors.append(actor)
 
         return sensors
     
@@ -359,7 +363,7 @@ class CarlaRos(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = CarlaRos()
+    node = VehicleNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

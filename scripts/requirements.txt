@@ -5,3 +5,4 @@ rosbag2_py
 pyarrow
 duckdb
 matplotlib
+opencv-contrib-python

@@ -55,6 +55,8 @@ private:
     static constexpr double ms2kmh = 3.6;
     static constexpr double kmh2ms = 1 / ms2kmh;
 
+    carla_msgs::msg::CarlaEgoVehicleControl stop_msg_;
+
 public:
     AdaptiveCruiseControlNode();
 
@@ -143,13 +145,16 @@ AdaptiveCruiseControlNode::AdaptiveCruiseControlNode() : Node("acc_node") {
 
     cruise_controller_ = std::make_unique<ACC>(tau, p, c, s, d0_, th_, phi_vals, q_vals, u_limits);
 
+    stop_msg_ = carla_msgs::msg::CarlaEgoVehicleControl();
+    stop_msg_.brake = 1.;
+
     t_last_ = this->get_clock()->now().seconds();
 }
 
 
 void AdaptiveCruiseControlNode::hostVelocityCallback(const std_msgs::msg::Float64& msg) {
     if (!this->get_parameter("allow_driving").as_bool()) {
-        control_pub_->publish(carla_msgs::msg::CarlaEgoVehicleControl());
+        control_pub_->publish(stop_msg_);
         return;
     }
 

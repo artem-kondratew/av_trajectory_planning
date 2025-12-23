@@ -1,5 +1,5 @@
 <OpenDRIVE>
-  <header revMajor="1" revMinor="4" name="Untitled" version="1" date="2025-12-22T18:39:59.513Z" north="0" south="0" east="0" west="0" vendor="Truevision.ai"></header>
+  <header revMajor="1" revMinor="4" name="big_highway.scene" version="1" date="2025-12-23T11:44:12.835Z" north="0" south="0" east="0" west="0" vendor="Truevision.ai"></header>
   <road name="Road1" length="10020" id="1" junction="-1" rule="RHT">
     <type s="0" type="town">
       <speed max="40" unit="mph"></speed>
@@ -19,6 +19,7 @@
       <superelevation s="10020" a="0" b="0" c="0" d="0"></superelevation>
     </lateralProfile>
     <lanes>
+      <laneOffset s="0" a="0" b="0" c="0" d="0"></laneOffset>
       <laneOffset s="0" a="0" b="0" c="0" d="0"></laneOffset>
       <laneOffset s="0" a="0" b="0" c="0" d="0"></laneOffset>
       <laneSection s="0">
@@ -131,11 +132,11 @@
       </laneSection>
     </lanes>
     <objects>
-      <object type="tree" name="" id="3" s="0" t="-23.006832193915848" orientation="none" length="1" width="1" height="1">
-        <repeat s="0" length="10020" distance="10"></repeat>
+      <object type="tree" name="" id="3" s="0" t="-22.869251064899924" zOffset="0.005" orientation="none" length="1" width="1" height="1">
+        <repeat s="0" length="10020" distance="20" tStart="-22.869251064899924"></repeat>
       </object>
-      <object type="tree" name="" id="4" s="0" t="22.772235305954666" orientation="none" length="1" width="1" height="1">
-        <repeat s="0" length="10020" distance="10"></repeat>
+      <object type="tree" name="" id="4" s="0" t="22.772235305954666" zOffset="0.005" orientation="none" length="1" width="1" height="1">
+        <repeat s="0" length="10020" distance="20"></repeat>
       </object>
     </objects>
   </road>

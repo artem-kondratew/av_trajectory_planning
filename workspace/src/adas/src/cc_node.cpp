@@ -48,6 +48,8 @@ private:
 
     static constexpr double ms2kmh = 3.6;
     static constexpr double kmh2ms = 1 / ms2kmh;
+    
+    carla_msgs::msg::CarlaEgoVehicleControl stop_msg_;
 
 public:
     CruiseControlNode();
@@ -140,6 +142,9 @@ CruiseControlNode::CruiseControlNode() : Node("cc_node") {
 
     pid_.initPid(p_term, i_term, d_term, i_max, i_min);
 
+    stop_msg_ = carla_msgs::msg::CarlaEgoVehicleControl();
+    stop_msg_.brake = 1.;
+
     t_last_ = this->get_clock()->now().seconds();
 }
 
@@ -148,8 +153,10 @@ void CruiseControlNode::linearVelocityCallback(const std_msgs::msg::Float64& msg
     v_ref_ = this->get_parameter("v_ref").as_double() * kmh2ms;
 
     if (!this->get_parameter("allow_driving").as_bool()) {
-        control_pub_->publish(carla_msgs::msg::CarlaEgoVehicleControl());
-        v_ref_pub_->publish(std_msgs::msg::Float64());
+        control_pub_->publish(stop_msg_);
+        auto zero = std_msgs::msg::Float64();
+        zero.data = 0;
+        v_ref_pub_->publish(zero);
         return;
     }
 

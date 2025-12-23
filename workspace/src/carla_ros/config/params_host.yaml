@@ -9,5 +9,6 @@
     x_offset: -20.0
     y_offset: 0.0
     create_markers: true
-    gen_imu_pub: false
-    gen_control_sub: false
+    generate_imu_pub: false
+    generate_control_sub: false
+    fix_y: true

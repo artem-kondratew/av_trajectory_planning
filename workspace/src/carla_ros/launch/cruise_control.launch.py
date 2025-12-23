@@ -7,6 +7,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.conditions import IfCondition
 
 
 package_name = 'carla_ros'
@@ -26,6 +27,21 @@ def generate_launch_description():
     json_path = DeclareLaunchArgument(
         'json_path',
         default_value=os.path.join(get_package_share_directory(package_name), 'config', 'stack_host.json'),
+    )
+
+    record_video = DeclareLaunchArgument(
+        'record_video',
+        default_value='false',
+    )
+
+    image_topic_arg = DeclareLaunchArgument(
+        'image_topic',
+        default_value='/carla/hero/back_viewer/image',
+    )
+
+    record_dir_arg = DeclareLaunchArgument(
+        'record_dir',
+        default_value='/data/default'
     )
     
     world_node = Node(
@@ -69,14 +85,33 @@ def generate_launch_description():
         }.items()
     )
 
+    recorder_node = Node(
+        package=package_name,
+        executable='recorder_node',
+        name='recorder_node',
+        output='screen',
+        parameters=[
+            host_params,
+            {
+                'image_topic': LaunchConfiguration('image_topic'),
+                'record_dir': LaunchConfiguration('record_dir'),
+            },
+        ],
+        condition=IfCondition(LaunchConfiguration('record_video')),
+    )
+
     ld = LaunchDescription()
     
     ld.add_action(log_level)
     ld.add_action(json_path)
+    ld.add_action(record_video)
+    ld.add_action(image_topic_arg)
+    ld.add_action(record_dir_arg)
     ld.add_action(world_node)
     ld.add_action(host_node)
     ld.add_action(rviz2)
     ld.add_action(manual_ackermann_control)
     ld.add_action(cc_node)
+    ld.add_action(recorder_node)
     
     return ld

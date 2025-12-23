@@ -1,5 +1,0 @@
-/carla/hero/vehicle_control_cmd
-/cruise_controller/v_ref
-/cruise_controller/y_vector
-/carla/hero/local_velocity
-/carla/hero/imu

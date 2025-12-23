@@ -82,7 +82,7 @@ ControlWrapper::ControlWrapper() : Node("control_wrapper") {
 
 
 void ControlWrapper::calcDelta() {
-    double d = *dist_ - 2 * (*dist_ref_);
+    double d = *dist_ - 4 * (*dist_ref_);
     delta_.emplace(d);
 }
 
@@ -94,7 +94,7 @@ void ControlWrapper::checkSwitchCondition() {
 
     calcDelta();
 
-    use_acc_ = (allow_acc_ && (*delta_ < 0)) ? true : false;
+    use_acc_ = (allow_acc_ && (*delta_ < 0.0)) ? true : false;
 }
 
 

@@ -18,6 +18,7 @@ services:
       - ../workspace:/workspace
       - ../data:/data
       - ../scripts/record.sh:/record.sh
+      - ../scripts/topics_lists:/topics_lists
 
     networks:
       - carla_net
