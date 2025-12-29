@@ -69,6 +69,7 @@ public:
     );
 
     std::pair<double, const Eigen::Vector<double, n_out>> calculate_control(double ts, double dx, double v, double v_rel, double a);
+    void resetSolver();
 };
 
 }

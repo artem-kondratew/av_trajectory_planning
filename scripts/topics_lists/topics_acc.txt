@@ -1,0 +1,16 @@
+/carla/hero/vehicle_control_cmd/cc_control  carla_msgs/msg/CarlaEgoVehicleControl
+/carla/hero/vehicle_control_cmd/acc_control carla_msgs/msg/CarlaEgoVehicleControl
+/carla/hero/vehicle_control_cmd             carla_msgs/msg/CarlaEgoVehicleControl
+/carla/dummy/vehicle_control_cmd            carla_msgs/msg/CarlaEgoVehicleControl
+/carla/hero/v_ref                           std_msgs/msg/Float64
+/carla/dummy/v_ref                          std_msgs/msg/Float64
+/carla/hero/y_vector                        geometry_msgs/msg/Vector3
+/carla/dummy/y_vector                       geometry_msgs/msg/Vector3
+/carla/hero/velocity                        std_msgs/msg/Float64
+/carla/dummy/velocity                       std_msgs/msg/Float64
+/carla/hero/imu                             sensor_msgs/msg/Imu
+/carla/dummy/imu                            sensor_msgs/msg/Imu
+/carla/hero/position                        geometry_msgs/msg/Vector3
+/carla/dummy/position                       geometry_msgs/msg/Vector3
+/carla/hero/dist_ref                        std_msgs/msg/Float64
+/carla/hero/dist                            std_msgs/msg/Float64

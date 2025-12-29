@@ -1,20 +1,9 @@
 from typing import Dict
-from pathlib import Path
-
 import pandas as pd
 import pyarrow.parquet as pq
 
 
-# ------------------------------------------------------------
-
 def read_topics_file(path: str) -> Dict[str, str]:
-    """
-    Reads topics file:
-        <topic> <msg_type>
-
-    Returns:
-        dict: topic -> msg_type
-    """
     topics = {}
 
     with open(path, "r") as f:
@@ -24,46 +13,26 @@ def read_topics_file(path: str) -> Dict[str, str]:
                 continue
 
             parts = line.split()
-            if len(parts) < 2:
+            if len(parts) != 2:
                 raise RuntimeError(f"Invalid topics file line: {line}")
 
-            topic, msg_type = parts[0], parts[1]
+            topic, msg_type = parts
             topics[topic] = msg_type
 
     return topics
 
 
-# ------------------------------------------------------------
-
-def topic_alias(topic: str) -> str:
+def topic_to_key(topic: str) -> str:
     """
-    Convert ROS topic to dataframe key.
+    Unique dataframe key for each topic.
     """
-    if topic.endswith("vehicle_control_cmd"):
-        return "control"
-    if topic.endswith("/v_ref"):
-        return "v_ref"
-    if topic.endswith("/y_vector"):
-        return "y_vector"
-    if topic.endswith("/velocity"):
-        return "velocity"
-    if topic.endswith("/imu"):
-        return "imu"
+    return topic.lstrip("/").replace("/", "__")
 
-    # fallback
-    return topic.replace("/", "_").strip("_")
-
-
-# ------------------------------------------------------------
 
 def load_topic_dataframes(
     parquet_path: str,
     topics_file: str
 ) -> Dict[str, pd.DataFrame]:
-    """
-    Load rosbag parquet and split into DataFrames
-    based strictly on topics_file.
-    """
 
     table = pq.read_table(parquet_path)
     df = table.to_pandas()
@@ -72,7 +41,7 @@ def load_topic_dataframes(
     result: Dict[str, pd.DataFrame] = {}
 
     for topic, msg_type in topics.items():
-        alias = topic_alias(topic)
+        key = topic_to_key(topic)
         df_topic = df[df["topic"] == topic]
 
         if df_topic.empty:
@@ -80,7 +49,7 @@ def load_topic_dataframes(
 
         # ---------------- control ----------------
         if msg_type.endswith("CarlaEgoVehicleControl"):
-            result[alias] = df_topic[[
+            result[key] = df_topic[[
                 "t",
                 "throttle",
                 "steer",
@@ -93,14 +62,14 @@ def load_topic_dataframes(
 
         # ---------------- Float64 ----------------
         elif msg_type.endswith("Float64"):
-            result[alias] = df_topic[[
+            result[key] = df_topic[[
                 "t",
                 "data",
             ]].reset_index(drop=True)
 
         # ---------------- Vector3 ----------------
         elif msg_type.endswith("Vector3"):
-            result[alias] = df_topic[[
+            result[key] = df_topic[[
                 "t",
                 "x",
                 "y",
@@ -109,7 +78,7 @@ def load_topic_dataframes(
 
         # ---------------- IMU ----------------
         elif msg_type.endswith("Imu"):
-            result[alias] = df_topic[[
+            result[key] = df_topic[[
                 "t",
                 "ax",
                 "ay",

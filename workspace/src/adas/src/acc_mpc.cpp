@@ -190,4 +190,15 @@ std::pair<double, const Eigen::Vector<double, ACC::n_out>> ACC::calculate_contro
     return std::make_pair(res, y);
 }
 
+
+void ACC::resetSolver() {
+    solver.data()->clearHessianMatrix();
+    solver.data()->clearLinearConstraintsMatrix();
+
+    solver.clearSolverVariables();
+    solver.clearSolver();
+
+    solver.settings()->setWarmStart(false);
+}
+
 }

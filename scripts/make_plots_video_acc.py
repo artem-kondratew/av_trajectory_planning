@@ -54,6 +54,21 @@ def make_output_name(parquet_path: str, suffix: str = "_plot.mp4") -> str:
 
     return str(p.with_name(stem + suffix))
 
+
+def zoh_sync(
+    ref_time: np.ndarray,
+    src_time: np.ndarray,
+    src_data: np.ndarray,
+) -> np.ndarray:
+    """
+    Zero-order hold sync:
+    value at ref_time[i] = src_data[j], where j = max idx s.t. src_time[j] <= ref_time[i]
+    """
+    idx = np.searchsorted(src_time, ref_time, side="right") - 1
+    idx[idx < 0] = 0
+    idx[idx >= len(src_data)] = len(src_data) - 1
+    return src_data[idx]
+
 # ============================================================
 # main
 # ============================================================
@@ -94,25 +109,39 @@ def main():
 
     dfs = load_topic_dataframes(args.parquet, args.topics_file)
 
-    v_ref = dfs["carla__hero__v_ref"]
-    velocity = dfs["carla__hero__velocity"]
+    v_ref = dfs["carla__hero__dist_ref"]
+    velocity = dfs["carla__hero__dist"]
+    v_host = dfs["carla__hero__velocity"]
 
-    ms2kmh = 3.6
-
-    v_ref_time = extract_time(v_ref)
-    v_ref_data = v_ref["data"].to_numpy() * ms2kmh
+    t = extract_time(v_ref)
+    v_ref_data = v_ref["data"].to_numpy()
 
     v_time = extract_time(velocity)
-    v_data = velocity["data"].to_numpy() * ms2kmh
+    v_data = velocity["data"].to_numpy()
 
-    t, v_ref_sync, v_sync = sync_timeseries(
-        v_ref_time, v_ref_data,
-        v_time, v_data,
-        fix_time=True
+    v_host_time = extract_time(v_host)
+    v_host_data = v_host["data"].to_numpy()
+
+    # t, v_ref_sync, v_sync = sync_timeseries(
+    #     v_ref_time, v_ref_data,
+    #     v_time, v_data,
+    #     fix_time=True
+    # )
+
+    v_sync = zoh_sync(
+        t,
+        v_time,
+        v_data,
     )
 
-    if len(t) == 0:
-        raise RuntimeError("No synchronized data")
+    v_sync_host = zoh_sync(
+        t,
+        v_host_time,
+        v_host_data,
+    )
+
+    # if len(t) == 0:
+    #     raise RuntimeError("No synchronized data")
 
     # --------------------------------------------------------
     # matplotlib setup
@@ -124,16 +153,24 @@ def main():
 
     ax.plot(
         t,
-        v_ref_sync,
-        label="reference velocity",
+        v_ref_data,
+        label="reference distance",
         color="red",
     )
 
     line_v, = ax.plot(
         [],
         [],
-        label="vehicle velocity",
+        label="distance",
         color="blue",
+        lw=2,
+    )
+
+    line_v_host, = ax.plot(
+        [],
+        [],
+        label="v_host",
+        color="green",
         lw=2,
     )
 
@@ -145,7 +182,7 @@ def main():
     )
 
     ax.set_xlabel("time, s")
-    ax.set_ylabel("velocity, km/h")
+    ax.set_ylabel("distance, m")
     ax.grid(True)
     ax.legend()
 
@@ -179,6 +216,7 @@ def main():
             continue
 
         line_v.set_data(t[mask], v_sync[mask])
+        line_v_host.set_data(t[mask], v_sync_host[mask])
         cursor.set_xdata([t_frame])
 
         xmin = max(0.0, t_frame - args.window)
@@ -188,7 +226,7 @@ def main():
             ax.set_xlim(xmin, xmax)
             last_xlim = (xmin, xmax)
 
-        ax.set_ylim(-10, 120)
+        ax.set_ylim(0, 50)
 
         fig.canvas.draw()
 

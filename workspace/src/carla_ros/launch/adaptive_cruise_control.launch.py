@@ -7,6 +7,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.conditions import IfCondition
 
 
 package_name = 'carla_ros'
@@ -32,6 +33,21 @@ def generate_launch_description():
     json_dummy = DeclareLaunchArgument(
         'json_dummy',
         default_value=os.path.join(get_package_share_directory(package_name), 'config', 'stack_dummy.json'),
+    )
+
+    record_video = DeclareLaunchArgument(
+        'record_video',
+        default_value='false',
+    )
+
+    image_topic_arg = DeclareLaunchArgument(
+        'image_topic',
+        default_value='/carla/hero/back_viewer/image',
+    )
+
+    record_dir_arg = DeclareLaunchArgument(
+        'record_dir',
+        default_value='/data/default'
     )
     
     world_node = Node(
@@ -69,6 +85,7 @@ def generate_launch_description():
             [os.path.join(get_package_share_directory('manual_ackermann_control'), 'launch', 'manual_control.launch.py')]
         ),
         launch_arguments={
+            'node_name': 'manual_ackermann_controller_host',
             'input_topic': '/carla/hero/cmd_vel',
             'output_topic': '/carla/hero/vehicle_control_cmd',
         }.items()
@@ -79,6 +96,7 @@ def generate_launch_description():
             [os.path.join(get_package_share_directory('manual_ackermann_control'), 'launch', 'manual_control.launch.py')]
         ),
         launch_arguments={
+            'node_name': 'manual_ackermann_controller_dummy',
             'input_topic': '/carla/dummy/cmd_vel',
             'output_topic': '/carla/dummy/vehicle_control_cmd',
         }.items()
@@ -101,29 +119,54 @@ def generate_launch_description():
             }.items()
     )
 
-    # acc_nodes = IncludeLaunchDescription(
-    #     PythonLaunchDescriptionSource(
-    #         [os.path.join(get_package_share_directory('adas'), 'launch', 'adaptive_cruise_control.launch.py')]
-    #     ),
-    #     launch_arguments=
-    #         {
-    #             'params_file': os.path.join(get_package_share_directory('adas'), 'config', 'params_acc.yaml'),
-    #             'cc_node_name': 'cc_node',
-    #         }.items()
-    # )
+    acc_nodes = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [os.path.join(get_package_share_directory('adas'), 'launch', 'adaptive_cruise_control.launch.py')]
+        ),
+        launch_arguments=
+            {
+                'log_level': LaunchConfiguration('log_level'),
+                'params_file': os.path.join(get_package_share_directory('adas'), 'config', 'params_acc.yaml'),
+                'cc_node_name': 'cc_node',
+                'host_velocity_topic': '/carla/hero/velocity',
+                'imu_topic': '/carla/hero/imu',
+                'control_topic': '/carla/hero/vehicle_control_cmd',
+                'v_ref_topic': '/carla/hero/v_ref',
+                'y_vector_topic': '/carla/hero/y_vector',
+            }.items()
+    )
+
+    recorder_node = Node(
+        package=package_name,
+        executable='recorder_node',
+        name='recorder_node',
+        output='screen',
+        parameters=[
+            host_params,
+            {
+                'image_topic': LaunchConfiguration('image_topic'),
+                'record_dir': LaunchConfiguration('record_dir'),
+            },
+        ],
+        condition=IfCondition(LaunchConfiguration('record_video')),
+    )
 
     ld = LaunchDescription()
     
     ld.add_action(log_level)
     ld.add_action(json_host)
     ld.add_action(json_dummy)
+    ld.add_action(record_video)
+    ld.add_action(image_topic_arg)
+    ld.add_action(record_dir_arg)
     ld.add_action(world_node)
     ld.add_action(host_node)
     ld.add_action(dummy_node)
     ld.add_action(rviz2)
-    ld.add_action(manual_ackermann_control_host)
-    ld.add_action(manual_ackermann_control_dummy)
+    # ld.add_action(manual_ackermann_control_host)
+    # ld.add_action(manual_ackermann_control_dummy)
     ld.add_action(cc_node_dummy)
-    # ld.add_action(acc_nodes)
+    ld.add_action(acc_nodes)
+    ld.add_action(recorder_node)
     
     return ld

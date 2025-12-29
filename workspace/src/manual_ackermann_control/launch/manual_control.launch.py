@@ -13,6 +13,11 @@ package_name = 'manual_ackermann_control'
 def generate_launch_description():
     ld = LaunchDescription()
 
+    node_name_arg = DeclareLaunchArgument(
+        'node_name',
+        default_value='manual_ackermann_controller'
+    )
+
     input_topic = DeclareLaunchArgument(
         'input_topic',
         default_value='/cmd_vel'
@@ -26,6 +31,7 @@ def generate_launch_description():
     manual_ackermann_control = Node(
         package=package_name,
         executable='manual_ackermann_control',
+        name=LaunchConfiguration('node_name'),
         output='screen',
         remappings=[
             ('input_topic', LaunchConfiguration('input_topic')),
@@ -33,6 +39,7 @@ def generate_launch_description():
         ]
     )
     
+    ld.add_action(node_name_arg)
     ld.add_action(input_topic)
     ld.add_action(output_topic)
     ld.add_action(manual_ackermann_control)

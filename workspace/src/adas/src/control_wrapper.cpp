@@ -9,6 +9,7 @@
 #include <rcl_interfaces/msg/set_parameters_result.hpp>
 
 #include <carla_msgs/msg/carla_ego_vehicle_control.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/float64.hpp>
 
 
@@ -23,6 +24,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr dist_ref_sub_;
     rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr dist_sub_;
     rclcpp::Publisher<carla_msgs::msg::CarlaEgoVehicleControl>::SharedPtr control_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr allow_pub_;
 
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr cb_handler_;
 
@@ -76,13 +78,14 @@ ControlWrapper::ControlWrapper() : Node("control_wrapper") {
     dist_ref_sub_ = this->create_subscription<std_msgs::msg::Float64>(dist_ref_topic, 10, std::bind(&ControlWrapper::distRefCallback, this, _1));
     dist_sub_ = this->create_subscription<std_msgs::msg::Float64>(dist_topic, 10, std::bind(&ControlWrapper::distCallback, this, _1));
     control_pub_ = this->create_publisher<carla_msgs::msg::CarlaEgoVehicleControl>(control_topic, 10);
+    allow_pub_ = this->create_publisher<std_msgs::msg::Bool>("/allow_acc", 10);
 
     cb_handler_ = this->add_on_set_parameters_callback(std::bind(&ControlWrapper::onParamChange, this, std::placeholders::_1));
 }
 
 
 void ControlWrapper::calcDelta() {
-    double d = *dist_ - 4 * (*dist_ref_);
+    double d = *dist_ - 2 * (*dist_ref_);
     delta_.emplace(d);
 }
 
@@ -94,7 +97,21 @@ void ControlWrapper::checkSwitchCondition() {
 
     calcDelta();
 
+#if false
     use_acc_ = (allow_acc_ && (*delta_ < 0.0)) ? true : false;
+#endif
+
+    if (!use_acc_) {
+        // cc -> acc
+        if (allow_acc_ && *delta_ < 0.0) {
+            use_acc_ = true;
+        }
+    } else {
+        // acc -> cc
+        if ((*delta_ > 2 * (*dist_ref_)) || !allow_acc_) {
+            use_acc_ = false;
+        }
+    }
 }
 
 
@@ -146,6 +163,9 @@ rcl_interfaces::msg::SetParametersResult ControlWrapper::onParamChange(const std
     for (const auto & p : params) {
         if (p.get_name() == "allow_acc") {
             allow_acc_ = p.as_bool();
+            auto msg = std_msgs::msg::Bool();
+            msg.data = allow_acc_;
+            allow_pub_->publish(msg);
             checkSwitchCondition();
         }
     }

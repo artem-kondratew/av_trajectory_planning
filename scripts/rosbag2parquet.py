@@ -2,7 +2,6 @@
 
 import argparse
 from pathlib import Path
-
 import pandas as pd
 
 from rosbag2_py import SequentialReader, StorageOptions, ConverterOptions
@@ -11,45 +10,28 @@ from rosidl_runtime_py.utilities import get_message
 
 
 def read_topics_file(path: str) -> dict[str, type]:
-    """
-    Reads topics file of format:
-    <topic_name> <ros_msg_type>
-
-    Example:
-    /carla/hero/imu sensor_msgs/msg/Imu
-    """
     topic_type_map = {}
 
     with open(path, "r") as f:
         for line in f:
             line = line.strip()
-
             if not line or line.startswith("#"):
                 continue
 
-            parts = line.split()
-            if len(parts) != 2:
-                raise RuntimeError(
-                    f"Invalid line in topics file (expected: <topic> <type>):\n{line}"
-                )
-
-            topic, msg_type_str = parts
-            msg_type = get_message(msg_type_str)
-
-            topic_type_map[topic] = msg_type
+            topic, msg_type_str = line.split()
+            topic_type_map[topic] = get_message(msg_type_str)
 
     return topic_type_map
 
 
-def extract_fields(msg) -> dict:
+def extract_fields(topic: str, msg) -> dict:
     """
-    Extracts fields from message into flat dict.
-    This is explicit on purpose (no reflection magic).
+    Extract fields based on TOPIC semantics, not message class.
     """
     row = {}
 
-    # Vehicle control
-    if msg.__class__.__name__ == "CarlaEgoVehicleControl":
+    # ---------- vehicle control ----------
+    if "vehicle_control_cmd" in topic:
         row.update({
             "throttle": msg.throttle,
             "steer": msg.steer,
@@ -60,31 +42,20 @@ def extract_fields(msg) -> dict:
             "manual_gear": msg.manual_gear_shift,
         })
 
-    # Float64
-    elif hasattr(msg, "data"):
+    # ---------- Float64-like ----------
+    elif topic.endswith(("v_ref", "velocity", "dist", "dist_ref")):
         row["data"] = msg.data
 
-    # Vector3
-    elif msg.__class__.__name__ == "Vector3":
+    # ---------- Vector3 ----------
+    elif topic.endswith(("y_vector", "position")):
         row.update({
             "x": msg.x,
             "y": msg.y,
             "z": msg.z,
         })
 
-    # Twist
-    elif msg.__class__.__name__ == "Twist":
-        row.update({
-            "vx": msg.linear.x,
-            "vy": msg.linear.y,
-            "vz": msg.linear.z,
-            "wx": msg.angular.x,
-            "wy": msg.angular.y,
-            "wz": msg.angular.z,
-        })
-
-    # IMU
-    elif msg.__class__.__name__ == "Imu":
+    # ---------- IMU ----------
+    elif topic.endswith("imu"):
         row.update({
             "ax": msg.linear_acceleration.x,
             "ay": msg.linear_acceleration.y,
@@ -99,26 +70,12 @@ def extract_fields(msg) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert rosbag2 to parquet (topics + types from file)"
+        description="Convert rosbag2 to parquet using topic-based semantics"
     )
 
-    parser.add_argument(
-        "bag_path",
-        type=str,
-        help="Path to rosbag2 directory"
-    )
-
-    parser.add_argument(
-        "--topics-file",
-        required=True,
-        help="Text file: <topic> <msg_type>"
-    )
-
-    parser.add_argument(
-        "--out",
-        default=None,
-        help="Output parquet file (default: next to bag)"
-    )
+    parser.add_argument("bag_path", type=str)
+    parser.add_argument("--topics-file", required=True)
+    parser.add_argument("--out", default=None)
 
     args = parser.parse_args()
 
@@ -135,7 +92,6 @@ def main():
 
     while reader.has_next():
         topic, data, t = reader.read_next()
-
         if topic not in topics:
             continue
 
@@ -143,12 +99,12 @@ def main():
         msg = deserialize_message(data, msg_type)
 
         row = {
-            "t": t,                         # nanoseconds
+            "t": t,
             "topic": topic,
             "type": msg_type.__name__,
         }
 
-        row.update(extract_fields(msg))
+        row.update(extract_fields(topic, msg))
         rows.append(row)
 
     if not rows:
@@ -157,16 +113,19 @@ def main():
     df = pd.DataFrame(rows)
 
     bag_path = Path(args.bag_path).resolve()
-    if args.out is None:
-        out_path = bag_path.with_suffix(".parquet")
-    else:
-        out_path = Path(args.out).resolve()
+    out_path = (
+        Path(args.out).resolve()
+        if args.out
+        else bag_path.with_suffix(".parquet")
+    )
 
     df.to_parquet(out_path, engine="pyarrow")
 
     print(f"[OK] Saved parquet to: {out_path}")
     print(f"[INFO] Rows: {len(df)}")
-    print(f"[INFO] Topics: {sorted(df['topic'].unique())}")
+    print(f"[INFO] Topics:")
+    for t in sorted(df["topic"].unique()):
+        print(f"  {t}")
 
 
 if __name__ == "__main__":
