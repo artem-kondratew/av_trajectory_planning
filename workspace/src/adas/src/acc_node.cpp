@@ -37,9 +37,8 @@ private:
     rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr dist_ref_pub_;
     rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr dist_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr y_pub_;
-    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr allow_sub_;
 
-    std::unique_ptr<ACC> cruise_controller_;
+    std::unique_ptr<ACC> controller_;
 
     double ts_;
 
@@ -59,8 +58,6 @@ private:
 
     carla_msgs::msg::CarlaEgoVehicleControl stop_msg_;
 
-    bool allow_acc_ = false;
-
 public:
     AdaptiveCruiseControlNode();
 
@@ -70,15 +67,11 @@ private:
     void hostVelocityCallback(const std_msgs::msg::Float64& msg);
     void dummyVelocityCallback(const std_msgs::msg::Float64& msg);
     void imuCallback(const sensor_msgs::msg::Imu& msg);
-
-    Limit vectorToLimit(const std::vector<double>& vec) {return Limit{vec[0], vec[1]};}
-
-    void allowCallback(const std_msgs::msg::Bool& msg);
 };
 
 
 AdaptiveCruiseControlNode::AdaptiveCruiseControlNode() : Node("acc_node") {
-    this->declare_parameter("allow_driving", true);
+    this->declare_parameter("allow_driving", false);
     this->declare_parameter("host_position_topic", rclcpp::PARAMETER_STRING);
     this->declare_parameter("dummy_position_topic", rclcpp::PARAMETER_STRING);
     this->declare_parameter("host_velocity_topic", rclcpp::PARAMETER_STRING);
@@ -95,6 +88,7 @@ AdaptiveCruiseControlNode::AdaptiveCruiseControlNode() : Node("acc_node") {
     this->declare_parameter("s", rclcpp::PARAMETER_DOUBLE);
     this->declare_parameter("d0", rclcpp::PARAMETER_DOUBLE);
     this->declare_parameter("th", rclcpp::PARAMETER_DOUBLE);
+    this->declare_parameter("v_limits", rclcpp::PARAMETER_DOUBLE_ARRAY);
     this->declare_parameter("u_limits", rclcpp::PARAMETER_DOUBLE_ARRAY);
     this->declare_parameter("phi_vals", rclcpp::PARAMETER_DOUBLE_ARRAY);
     this->declare_parameter("q_vals", rclcpp::PARAMETER_DOUBLE_ARRAY);
@@ -115,7 +109,8 @@ AdaptiveCruiseControlNode::AdaptiveCruiseControlNode() : Node("acc_node") {
     double s = this->get_parameter("s").as_double();
     d0_ = this->get_parameter("d0").as_double();
     th_ = this->get_parameter("th").as_double();
-    Limit u_limits = vectorToLimit(this->get_parameter("u_limits").as_double_array());
+    Limit v_limits = Limit::vectorToLimit(this->get_parameter("v_limits").as_double_array());
+    Limit u_limits = Limit::vectorToLimit(this->get_parameter("u_limits").as_double_array());
     std::vector<double> phi_vals = this->get_parameter("phi_vals").as_double_array();
     std::vector<double> q_vals = this->get_parameter("q_vals").as_double_array();
 
@@ -129,28 +124,30 @@ AdaptiveCruiseControlNode::AdaptiveCruiseControlNode() : Node("acc_node") {
     RCLCPP_INFO(this->get_logger(), "dist_topic: '%s'", dist_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "y_vector_topic: '%s'", y_vector_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "tau: %lf s", tau);
-    RCLCPP_INFO(this->get_logger(), "tau: %lf s", ts_);
+    RCLCPP_INFO(this->get_logger(), "ts: %lf s", ts_);
     RCLCPP_INFO(this->get_logger(), "p: %d", p);
     RCLCPP_INFO(this->get_logger(), "c: %d", c);
     RCLCPP_INFO(this->get_logger(), "s: %lf", s);
     RCLCPP_INFO(this->get_logger(), "d0: %lf", d0_);
     RCLCPP_INFO(this->get_logger(), "th: %lf", th_);
+    RCLCPP_INFO(this->get_logger(), "v_limits: [%lf, %lf] km/h", v_limits.min, v_limits.max);
     RCLCPP_INFO(this->get_logger(), "u_limits: [%lf, %lf] m/s^2", u_limits.min, u_limits.max);
     RCLCPP_INFO(this->get_logger(), "phi_vals: [%lf, %lf, %lf]", phi_vals[0], phi_vals[1], phi_vals[2]);
     RCLCPP_INFO(this->get_logger(), "q_vals: [%lf, %lf, %lf]", q_vals[0], q_vals[1], q_vals[2]);
+
+    v_limits.scale(kmh2ms);
 
     host_position_sub_ = this->create_subscription<geometry_msgs::msg::Vector3>(host_position_topic, 10, std::bind(&AdaptiveCruiseControlNode::hostPositionCallback, this, _1));
     dummy_position_sub_ = this->create_subscription<geometry_msgs::msg::Vector3>(dummy_position_topic, 10, std::bind(&AdaptiveCruiseControlNode::dummyPositionCallback, this, _1));
     host_velocity_sub_ = this->create_subscription<std_msgs::msg::Float64>(host_velocity_topic, 10, std::bind(&AdaptiveCruiseControlNode::hostVelocityCallback, this, _1));
     dummy_velocity_sub_ = this->create_subscription<std_msgs::msg::Float64>(dummy_velocity_topic, 10, std::bind(&AdaptiveCruiseControlNode::dummyVelocityCallback, this, _1));
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(imu_topic, 10, std::bind(&AdaptiveCruiseControlNode::imuCallback, this, _1));
-    allow_sub_ = this->create_subscription<std_msgs::msg::Bool>("/allow_acc", 10, std::bind(&AdaptiveCruiseControlNode::allowCallback, this, _1));
     control_pub_ = this->create_publisher<carla_msgs::msg::CarlaEgoVehicleControl>(control_topic, 10);
     dist_ref_pub_ = this->create_publisher<std_msgs::msg::Float64>(dist_ref_topic, 10);
     dist_pub_ = this->create_publisher<std_msgs::msg::Float64>(dist_topic, 10);
     y_pub_ = this->create_publisher<geometry_msgs::msg::Vector3>(y_vector_topic, 10);
 
-    cruise_controller_ = std::make_unique<ACC>(tau, p, c, s, d0_, th_, phi_vals, q_vals, u_limits);
+    controller_ = std::make_unique<ACC>(tau, p, c, s, d0_, th_, phi_vals, q_vals, u_limits);
 
     stop_msg_ = carla_msgs::msg::CarlaEgoVehicleControl();
     stop_msg_.brake = 1.;
@@ -159,30 +156,15 @@ AdaptiveCruiseControlNode::AdaptiveCruiseControlNode() : Node("acc_node") {
 }
 
 
-void AdaptiveCruiseControlNode::allowCallback(const std_msgs::msg::Bool& msg) {
-    allow_acc_ = msg.data;
-}
-
-
 void AdaptiveCruiseControlNode::hostVelocityCallback(const std_msgs::msg::Float64& msg) {
-    std::cout << "ok0" << std::endl;
-    if (!allow_acc_) {
-        cruise_controller_->resetSolver();
-        return;
-    }
-    std::cout << "ok1" << std::endl;
-
     if (!this->get_parameter("allow_driving").as_bool()) {
         control_pub_->publish(stop_msg_);
         return;
     }
 
-    std::cout << "ok2" << std::endl;
-
     if (!x_host_ || !x_dummy_ || !v_dummy_) {
         return;
     }
-    std::cout << "ok3" << std::endl;
 
     double v = msg.data;  // m/s
 
@@ -212,11 +194,7 @@ void AdaptiveCruiseControlNode::hostVelocityCallback(const std_msgs::msg::Float6
 
     double v_rel = *v_dummy_ - v;
 
-    std::cout << "ok4" << std::endl;
-
-    auto control_output = cruise_controller_->calculate_control(ts_, dist, v, v_rel, a);
-
-    std::cout << "ok5" << std::endl;
+    auto control_output = controller_->calculate_control(ts_, dist, v, v_rel, a);
 
     double u = control_output.first;
     auto y = control_output.second;

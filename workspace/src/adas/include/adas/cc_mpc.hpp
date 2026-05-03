@@ -14,6 +14,7 @@ namespace cruise_control {
 
 class CruiseController {
 private:
+    const double ts;
     const double tau;
     const int p;
     const int c;
@@ -45,26 +46,33 @@ private:
     Eigen::VectorXd M2;
 
     std::optional<Eigen::Vector<double, n_in>> x_predicted;
+
+    Eigen::VectorXd M_hat;
+    Eigen::VectorXd N_hat;
+
+    Eigen::VectorXd U_min;
+    Eigen::VectorXd U_max;
     
     double a_prev = 0;
     double u_prev = 0;
-
-    const Limit u_limits;
 
     OsqpEigen::Solver solver;
      
 public:
     CruiseController(
+        double ts,
         double tau,
         int p,
         int c,
         double s,
         const std::vector<double>& phi_vals,
         const std::vector<double>& q_vals,
+        const Limit& a_limits,
+        const Limit& j_limits,
         const Limit& u_limits
     );
 
-    std::pair<double, const Eigen::Vector<double, n_out>> calculate_control(double dt, double v_ref, double v, double a);
+    std::pair<double, const Eigen::Vector<double, n_out>> calculate_control(double v_ref, double v, double a);
 };
 
 }

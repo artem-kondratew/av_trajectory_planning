@@ -1,0 +1,26 @@
+/**:
+  ros__parameters:
+    tau: 2.0
+    ts: 0.05
+    p: 10
+    c: 10
+    v_ref: 80.0
+    v_limits: [0.0, 120.0]
+    a_limits: [-1e6, 1e6]
+    j_limits: [-1e6, 1e6]
+    u_limits: [-0.4, 1.2]
+    phi_vals: [0.6, 0.6, 0.6]
+    q_vals: [20., 1., 1.]
+    s: 18.
+    p_term: 0.0
+    i_term: 0.15
+    d_term: 0.0
+    i_min: -0.2
+    i_max: 0.2
+    i_trim_scale: 0.3
+    i_trim_min: 0.1
+
+    steer_amplitude: 0.01
+    steer_frequency: 0.5
+    steer_base: 0.0
+    # steer_base: 0.0

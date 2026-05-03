@@ -5,6 +5,9 @@
     p: 10
     c: 10
     v_ref: 80.0
+    v_limits: [0.0, 120.0]
+    a_limits: [-1e6, 1e6]
+    j_limits: [-1e6, 1e6]
     u_limits: [-0.4, 1.2]
     phi_vals: [0.6, 0.6, 0.6]
     q_vals: [20., 1., 1.]

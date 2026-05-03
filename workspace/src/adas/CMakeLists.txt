@@ -27,13 +27,25 @@ add_executable(cc_node
 )
 
 add_executable(acc_node
-    src/cc_mpc.cpp
     src/acc_mpc.cpp
     src/acc_node.cpp
 )
 
-add_executable(control_wrapper
-    src/control_wrapper.cpp
+add_executable(pp_node
+    src/pp_node.cpp
+)
+
+add_executable(stanley_node
+    src/stanley_node.cpp
+)
+
+add_executable(lateral_mpc_node
+    src/lateral_mpc.cpp
+    src/lateral_mpc_node.cpp
+)
+
+add_executable(steer_test_node
+    src/steer_test_node.cpp
 )
 
 target_include_directories(cc_node
@@ -46,6 +58,21 @@ target_include_directories(acc_node
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+target_include_directories(pp_node
+  PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_include_directories(stanley_node
+  PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_include_directories(lateral_mpc_node
+  PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
 target_link_libraries(cc_node
     Eigen3::Eigen
     OsqpEigen::OsqpEigen
@@ -56,9 +83,17 @@ target_link_libraries(acc_node
     OsqpEigen::OsqpEigen
 )
 
+target_link_libraries(lateral_mpc_node
+    Eigen3::Eigen
+    OsqpEigen::OsqpEigen
+)
+
 ament_target_dependencies(cc_node carla_msgs control_toolbox geometry_msgs rclcpp sensor_msgs std_msgs)
 ament_target_dependencies(acc_node carla_msgs control_toolbox geometry_msgs rclcpp sensor_msgs std_msgs)
-ament_target_dependencies(control_wrapper carla_msgs rclcpp std_msgs)
+ament_target_dependencies(pp_node carla_msgs rclcpp)
+ament_target_dependencies(stanley_node carla_msgs rclcpp)
+ament_target_dependencies(lateral_mpc_node carla_msgs control_toolbox geometry_msgs rclcpp sensor_msgs std_msgs)
+ament_target_dependencies(steer_test_node carla_msgs geometry_msgs rclcpp)
 
 install(DIRECTORY
     launch config
@@ -68,7 +103,10 @@ install(DIRECTORY
 install(TARGETS
     cc_node
     acc_node
-    control_wrapper
+    pp_node
+    stanley_node
+    lateral_mpc_node
+    steer_test_node
     DESTINATION lib/${PROJECT_NAME}
 )
 

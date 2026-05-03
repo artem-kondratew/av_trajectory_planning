@@ -10,3 +10,6 @@ venv
 data
 !data/.empty
 *.mp4
+rosbag*
+*.png
+*.npy

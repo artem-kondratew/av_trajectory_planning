@@ -1,0 +1,36 @@
+/**:
+  ros__parameters:
+    # Steering actuator first-order lag time constant (s).
+    # Must satisfy tau >> ts for a stable discrete model.
+    # Was incorrectly 0.001 (caused a_33 = 1 - ts/tau = -49 → unstable).
+    tau: 0.06
+
+    # Control timestep (s) — must match the rate of lateral_mpc_state messages.
+    ts: 0.05
+
+    # Prediction horizon (steps).  Must match the `p` parameter of vehicle_node
+    # so that kappa_ref has exactly p entries.
+    p: 4
+
+    # Control horizon (steps, c ≤ p).
+    c: 2
+
+    # Vehicle wheelbase (m).  Was incorrectly 10.0 (a bus, not a car).
+    L: 2.642
+
+    # Smoothness weight — penalises changes between consecutive steering commands.
+    s: 10.0
+
+    # Output weights [q_e, q_theta, q_delta]:
+    #   q_e     — lateral error (m)
+    #   q_theta — heading error (rad)
+    #   q_delta — steering angle (rad, low weight since actuator tracks naturally)
+    q_vals: [10.0, 10.0, 10.0]
+
+    # Steering angle bounds for the MPC optimisation (rad).
+    u_limits: [-0.5, 0.5]
+
+    # Maximum physical steering angle of the vehicle (rad), used to normalise
+    # the MPC output [rad] → Carla steer [-1, 1].
+    # Carla vehicles are typically ~70 deg = 1.2217 rad.
+    max_steer_rad: 1.2217

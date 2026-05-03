@@ -31,6 +31,7 @@ private:
     rclcpp::Publisher<carla_msgs::msg::CarlaEgoVehicleControl>::SharedPtr control_pub_;
     rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr v_ref_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr y_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_republish_pub_;
 
     std::unique_ptr<cc::CruiseController> cruise_controller_;
 
@@ -39,7 +40,6 @@ private:
     double i_trim_scale_;
     double i_trim_min_;
 
-    double ts_;
     double v_ref_;
     
     sensor_msgs::msg::Imu last_imu_msg_;
@@ -57,8 +57,6 @@ public:
 private:
     void linearVelocityCallback(const std_msgs::msg::Float64& msg);
     void imuCallback(const sensor_msgs::msg::Imu& msg);
-
-    Limit vectorToLimit(const std::vector<double>& vec) {return Limit{vec[0], vec[1]};}
 };
 
 
@@ -75,6 +73,9 @@ CruiseControlNode::CruiseControlNode() : Node("cc_node") {
     this->declare_parameter("c", rclcpp::PARAMETER_INTEGER);
     this->declare_parameter("s", rclcpp::PARAMETER_DOUBLE);
     this->declare_parameter("v_ref", rclcpp::PARAMETER_DOUBLE);
+    this->declare_parameter("v_limits", rclcpp::PARAMETER_DOUBLE_ARRAY);
+    this->declare_parameter("a_limits", rclcpp::PARAMETER_DOUBLE_ARRAY);
+    this->declare_parameter("j_limits", rclcpp::PARAMETER_DOUBLE_ARRAY);
     this->declare_parameter("u_limits", rclcpp::PARAMETER_DOUBLE_ARRAY);
     this->declare_parameter("phi_vals", rclcpp::PARAMETER_DOUBLE_ARRAY);
     this->declare_parameter("q_vals", rclcpp::PARAMETER_DOUBLE_ARRAY);
@@ -92,12 +93,15 @@ CruiseControlNode::CruiseControlNode() : Node("cc_node") {
     std::string v_ref_topic = this->get_parameter("v_ref_topic").as_string();
     std::string y_vector_topic = this->get_parameter("y_vector_topic").as_string();
     double tau = this->get_parameter("tau").as_double();
-    ts_ = this->get_parameter("ts").as_double();
+    double ts = this->get_parameter("ts").as_double();
     int p = this->get_parameter("p").as_int();
     int c = this->get_parameter("c").as_int();
     double s = this->get_parameter("s").as_double();
     v_ref_ = this->get_parameter("v_ref").as_double();
-    Limit u_limits = vectorToLimit(this->get_parameter("u_limits").as_double_array());
+    Limit v_limits = Limit::vectorToLimit(this->get_parameter("v_limits").as_double_array());
+    Limit a_limits = Limit::vectorToLimit(this->get_parameter("a_limits").as_double_array());
+    Limit j_limits = Limit::vectorToLimit(this->get_parameter("j_limits").as_double_array());
+    Limit u_limits = Limit::vectorToLimit(this->get_parameter("u_limits").as_double_array());
     std::vector<double> phi_vals = this->get_parameter("phi_vals").as_double_array();
     std::vector<double> q_vals = this->get_parameter("q_vals").as_double_array();
     double p_term = this->get_parameter("p_term").as_double();
@@ -114,11 +118,14 @@ CruiseControlNode::CruiseControlNode() : Node("cc_node") {
     RCLCPP_INFO(this->get_logger(), "v_ref_topic: '%s'", v_ref_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "y_vector_topic: '%s'", y_vector_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "tau: %lf s", tau);
-    RCLCPP_INFO(this->get_logger(), "tau: %lf s", ts_);
+    RCLCPP_INFO(this->get_logger(), "ts: %lf s", ts);
     RCLCPP_INFO(this->get_logger(), "p: %d", p);
     RCLCPP_INFO(this->get_logger(), "c: %d", c);
     RCLCPP_INFO(this->get_logger(), "s: %lf", s);
     RCLCPP_INFO(this->get_logger(), "v_ref: %lf km/h", v_ref_);
+    RCLCPP_INFO(this->get_logger(), "v_limits: [%lf, %lf] km/h", v_limits.min * ms2kmh, v_limits.max * ms2kmh);
+    RCLCPP_INFO(this->get_logger(), "a_limits: [%lf, %lf] m/s^2", a_limits.min, a_limits.max);
+    RCLCPP_INFO(this->get_logger(), "j_limits: [%lf, %lf] m/s^3", j_limits.min, j_limits.max);
     RCLCPP_INFO(this->get_logger(), "u_limits: [%lf, %lf] m/s^2", u_limits.min, u_limits.max);
     RCLCPP_INFO(this->get_logger(), "phi_vals: [%lf, %lf, %lf]", phi_vals[0], phi_vals[1], phi_vals[2]);
     RCLCPP_INFO(this->get_logger(), "q_vals: [%lf, %lf, %lf]", q_vals[0], q_vals[1], q_vals[2]);
@@ -131,14 +138,16 @@ CruiseControlNode::CruiseControlNode() : Node("cc_node") {
     RCLCPP_INFO(this->get_logger(), "i_trim_min: %lf", i_trim_min_);
 
     v_ref_ *= kmh2ms;
+    v_limits.scale(kmh2ms);
 
     linear_velocity_sub_ = this->create_subscription<std_msgs::msg::Float64>(host_velocity_topic, 10, std::bind(&CruiseControlNode::linearVelocityCallback, this, _1));
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(imu_topic, 10, std::bind(&CruiseControlNode::imuCallback, this, _1));
     control_pub_ = this->create_publisher<carla_msgs::msg::CarlaEgoVehicleControl>(control_topic, 10);
     v_ref_pub_ = this->create_publisher<std_msgs::msg::Float64>(v_ref_topic, 10);
     y_pub_ = this->create_publisher<geometry_msgs::msg::Vector3>(y_vector_topic, 10);
+    imu_republish_pub_ = this->create_publisher<sensor_msgs::msg::Imu>(imu_topic + "_stamped", 10);
 
-    cruise_controller_ = std::make_unique<cc::CruiseController>(tau, p, c, s, phi_vals, q_vals, u_limits);
+    cruise_controller_ = std::make_unique<cc::CruiseController>(ts, tau, p, c, s, phi_vals, q_vals, a_limits, j_limits, u_limits);
 
     pid_.initPid(p_term, i_term, d_term, i_max, i_min);
 
@@ -167,7 +176,7 @@ void CruiseControlNode::linearVelocityCallback(const std_msgs::msg::Float64& msg
 
     double a = last_imu_msg_.linear_acceleration.x;
 
-    auto control_output = cruise_controller_->calculate_control(ts_, v_ref_, v, a);
+    auto control_output = cruise_controller_->calculate_control(v_ref_, v, a);
 
     double u_mpc = control_output.first;
     auto y = control_output.second;
@@ -216,8 +225,13 @@ void CruiseControlNode::linearVelocityCallback(const std_msgs::msg::Float64& msg
     t_last_ = t;
 }
 
+
 void CruiseControlNode::imuCallback(const sensor_msgs::msg::Imu& msg) {
     last_imu_msg_ = msg;
+
+    auto imu_stamped = msg;
+    imu_stamped.header.stamp = this->get_clock()->now();
+    imu_republish_pub_->publish(imu_stamped);
 }
 
 

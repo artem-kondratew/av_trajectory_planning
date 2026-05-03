@@ -7,9 +7,14 @@ import numpy as np
 import carla
 import rclpy
 
+from scipy.signal import savgol_filter
+
 from rclpy.node import Node
 from carla_msgs.msg import CarlaEgoVehicleControl as Control
-from geometry_msgs.msg import Vector3
+from carla_msgs.msg import PPState
+from carla_msgs.msg import StanleyState
+from carla_msgs.msg import LateralMpcState
+from geometry_msgs.msg import Vector3, Vector3Stamped
 from sensor_msgs.msg import Imu
 from std_msgs.msg import Float64
 from visualization_msgs.msg import Marker, MarkerArray
@@ -20,6 +25,7 @@ from .submodules.transform_3d import Transform3D
 MAGENTA = (1.0, 0.0, 1.0)
 GREEN = (0.0, 1.0, 0.0)
 BLUE = (0.0, 0.0, 1.0)
+RED = (1.0, 0.0, 0.0)
 
 
 class VehicleNode(Node):
@@ -36,10 +42,14 @@ class VehicleNode(Node):
             ('spawn_point', rclpy.Parameter.Type.INTEGER),
             ('x_offset', rclpy.Parameter.Type.DOUBLE),
             ('y_offset', rclpy.Parameter.Type.DOUBLE),
+            ('yaw', 0.0),
+            ('use_yaw', False),
             ('create_markers', rclpy.Parameter.Type.BOOL),
             ('generate_imu_pub', rclpy.Parameter.Type.BOOL),
             ('generate_control_sub', rclpy.Parameter.Type.BOOL),
             ('fix_y', rclpy.Parameter.Type.BOOL),
+            ('lookahead_dist', 8.0),
+            ('p', 10),
         ]
 
         self.declare_parameters(namespace='', parameters=parameters)
@@ -53,10 +63,15 @@ class VehicleNode(Node):
         spawn_point = self.get_parameter('spawn_point').get_parameter_value().integer_value
         x_offset = self.get_parameter('x_offset').get_parameter_value().double_value
         y_offset = self.get_parameter('y_offset').get_parameter_value().double_value
+        yaw = self.get_parameter('yaw').get_parameter_value().double_value
+        use_yaw = self.get_parameter('use_yaw').get_parameter_value().bool_value
+        yaw = yaw if use_yaw else None
         self.create_markers = self.get_parameter('create_markers').get_parameter_value().bool_value
         self.generate_imu_pub = self.get_parameter('generate_imu_pub').get_parameter_value().bool_value
         self.generate_control_sub = self.get_parameter('generate_control_sub').get_parameter_value().bool_value
         self.fix_y = self.get_parameter('fix_y').get_parameter_value().bool_value
+        self.lookahead_dist = self.get_parameter('lookahead_dist').get_parameter_value().double_value
+        self.p = self.get_parameter('p').get_parameter_value().integer_value
 
         self.get_logger().info(f'callback_period: {callback_period}')
         self.get_logger().info(f'host: {host}')
@@ -67,10 +82,14 @@ class VehicleNode(Node):
         self.get_logger().info(f'spawn_point: {spawn_point}')
         self.get_logger().info(f'x_offset: {x_offset}')
         self.get_logger().info(f'y_offset: {y_offset}')
+        self.get_logger().info(f'yaw: {yaw}')
+        self.get_logger().info(f'use_yaw: {use_yaw}')
         self.get_logger().info(f'create_markers: {self.create_markers}')
         self.get_logger().info(f'generate_imu_pub: {self.generate_imu_pub}')
         self.get_logger().info(f'generate_control_sub: {self.generate_control_sub}')
         self.get_logger().info(f'fix_y: {self.fix_y}')
+        self.get_logger().info(f'lookahead_dist: {self.lookahead_dist}')
+        self.get_logger().info(f'p: {self.p}')
 
         client = carla.Client(host, port)
         client.set_timeout(10.0)
@@ -80,13 +99,28 @@ class VehicleNode(Node):
 
         with open(json_path) as f:
             config = json.load(f)
-            self.vehicle = self.setup_vehicle(self.world, config, self.id, color, spawn_point, x_offset, y_offset)
+            self.vehicle = self.setup_vehicle(self.world, config, self.id, color, spawn_point, x_offset, y_offset, yaw)
             self.sensors = self.setup_sensors(self.world, self.vehicle, config.get('sensors', []))
 
         self.create_timer(callback_period, self.callback)
 
         self.position_pub = self.create_publisher(Vector3, f'carla/{self.id}/position', 10)
+        self.position_stamped_pub = self.create_publisher(Vector3Stamped, f'carla/{self.id}/position_stamped', 10)
         self.velocity_pub = self.create_publisher(Float64, f'carla/{self.id}/velocity', 10)
+        self.velocity_stamped_pub = self.create_publisher(Vector3Stamped, f'carla/{self.id}/velocity_stamped', 10)
+        self.yaw_pub = self.create_publisher(Vector3Stamped, f'carla/{self.id}/yaw', 10)
+        self.rear_axle_lane_offset_pub = self.create_publisher(Float64, f'carla/{self.id}/rear_axle_lane_offset', 10)
+        self.pp_state_pub = self.create_publisher(PPState, f'carla/{self.id}/pp_state', 10)
+        self.stanley_state_pub = self.create_publisher(
+            StanleyState,
+            f'carla/{self.id}/stanley_state',
+            10,
+        )
+        self.lateral_mpc_state_pub = self.create_publisher(
+            LateralMpcState,
+            f'carla/{self.id}/lateral_mpc_state',
+            10,
+        )
 
         if self.create_markers:
             self.marker_pub = self.create_publisher(MarkerArray, f'carla/{self.id}/waypoints', 10)
@@ -123,8 +157,90 @@ class VehicleNode(Node):
     def location2ndarray(self, location : carla.Location) -> np.ndarray:
         return Transform3D.translation(location.x, location.y, location.z)
 
+    def lane_waypoints_and_lookahead(self, current_lane: carla.Waypoint):
+        """Forward waypoints on current lane and PP/Stanley lookahead (falls back to current_lane)."""
+        next_wps = []
+        wp = current_lane
+        for _ in range(100):
+            wp_list = wp.next(0.2)
+            if not wp_list:
+                continue
+            wp = wp_list[0]
+            next_wps.append(wp)
+        lookahead_wp = current_lane
+        if not next_wps:
+            return next_wps, lookahead_wp
+        lookahead_wp = next_wps[-1]
+        accum_dist = 0.0
+        prev = current_lane.transform.location
+        for w in next_wps:
+            loc = w.transform.location
+            dx = loc.x - prev.x
+            dy = loc.y - prev.y
+            ds = np.hypot(dx, dy)
+            accum_dist += ds
+            if accum_dist >= self.lookahead_dist:
+                lookahead_wp = w
+                break
+            prev = loc
+        return next_wps, lookahead_wp
+
     def callback(self):
         vehicle_location = self.vehicle.get_location()
+        bbox = self.vehicle.bounding_box
+        vehicle_tf = self.vehicle.get_transform()
+        wheels = self.vehicle.get_physics_control().wheels
+
+        wheels_world = [
+            carla.Location(
+                w.position.x / 100.0,
+                w.position.y / 100.0,
+                w.position.z / 100.0,
+            )
+            for w in wheels
+        ]
+
+        front_left  = wheels_world[0]
+        front_right = wheels_world[1]
+        rear_left   = wheels_world[2]
+        rear_right  = wheels_world[3]
+
+        front_axle = carla.Location(
+            (front_left.x + front_right.x) / 2.0,
+            (front_left.y + front_right.y) / 2.0,
+            (front_left.z + front_right.z) / 2.0,
+        )
+
+        rear_axle = carla.Location(
+            (rear_left.x + rear_right.x) / 2.0,
+            (rear_left.y + rear_right.y) / 2.0,
+            (rear_left.z + rear_right.z) / 2.0,
+        )
+
+        L = ((front_axle.x - rear_axle.x) ** 2 +
+            (front_axle.y - rear_axle.y) ** 2 +
+            (front_axle.z - rear_axle.z) ** 2) ** 0.5
+
+        wheels_info = ', '.join(
+            f'{i}=({w.x:.3f}, {w.y:.3f}, {w.z:.3f})'
+            for i, w in enumerate(wheels_world)
+        )
+
+        # self.get_logger().info(
+        #     f'wheels_pos = {wheels_info}'
+        # )
+
+        # self.get_logger().info(
+        #     f'rear_axle = ({rear_axle.x:.3f}, {rear_axle.y:.3f}, {rear_axle.z:.3f})'
+        # )
+
+        # self.get_logger().info(
+        #     f'wheelbase L = {L:.3f} m'
+        # )
+
+        # self.get_logger().info(
+        #     f'vehicle_location = ({vehicle_location.x:.3f}, {vehicle_location.y:.3f}, {vehicle_location.z:.3f})'
+        # )
 
         position_msg = Vector3()
         position_msg.x = vehicle_location.x
@@ -132,18 +248,138 @@ class VehicleNode(Node):
         position_msg.z = vehicle_location.z
         self.position_pub.publish(position_msg)
 
+        position_stamped_msg = Vector3Stamped()
+        position_stamped_msg.header.stamp = self.get_clock().now().to_msg()
+        position_stamped_msg.header.frame_id = 'map'
+        position_stamped_msg.vector.x = vehicle_location.x
+        position_stamped_msg.vector.y = vehicle_location.y
+        position_stamped_msg.vector.z = vehicle_location.z
+        self.position_stamped_pub.publish(position_stamped_msg)
+
         velocity = self.vehicle.get_velocity()
+        speed = np.sqrt(velocity.x**2 + velocity.y**2)
         velocity_msg = Float64()
-        velocity_msg.data = np.sqrt(velocity.x**2 + velocity.y**2)
+        velocity_msg.data = speed
         self.velocity_pub.publish(velocity_msg)
+
+        velocity_stamped_msg = Vector3Stamped()
+        velocity_stamped_msg.header.stamp = self.get_clock().now().to_msg()
+        velocity_stamped_msg.header.frame_id = 'map'
+        velocity_stamped_msg.vector.x = speed
+        self.velocity_stamped_pub.publish(velocity_stamped_msg)
+
+        yaw_msg = Vector3Stamped()
+        yaw_msg.header.stamp = self.get_clock().now().to_msg()
+        yaw_msg.header.frame_id = 'map'
+        yaw_msg.vector.z = np.deg2rad(vehicle_tf.rotation.yaw)
+        self.yaw_pub.publish(yaw_msg)
+
+        current_lane = self.map.get_waypoint(vehicle_location, project_to_road=False)
+        next_current_lane_waypoints = []
+        lookahead_wp = None
+        if current_lane is not None:
+            next_current_lane_waypoints, lookahead_wp = self.lane_waypoints_and_lookahead(
+                current_lane
+            )
+            yaw_vehicle = np.deg2rad(vehicle_tf.rotation.yaw)
+            yaw_path = np.deg2rad(lookahead_wp.transform.rotation.yaw)
+            wp_loc = lookahead_wp.transform.location
+            xf = rear_axle.x + L * np.cos(yaw_vehicle)
+            yf = rear_axle.y + L * np.sin(yaw_vehicle)
+            dx = xf - wp_loc.x
+            dy = yf - wp_loc.y
+            nx = -np.sin(yaw_path)
+            ny = np.cos(yaw_path)
+            e = dx * nx + dy * ny
+            v = float(np.sqrt(velocity.x**2 + velocity.y**2))
+            stanley_msg = StanleyState()
+            stanley_msg.header.stamp = self.get_clock().now().to_msg()
+            stanley_msg.header.frame_id = 'map'
+            stanley_msg.xr = xf
+            stanley_msg.yr = yf
+            stanley_msg.yaw_vehicle = yaw_vehicle
+            stanley_msg.yaw_path = yaw_path
+            stanley_msg.e = -e
+            stanley_msg.v = v
+            self.stanley_state_pub.publish(stanley_msg)
+
+            theta = yaw_path - yaw_vehicle
+            theta = float(np.arctan2(np.sin(theta), np.cos(theta)))
+
+            control = self.vehicle.get_control()
+            max_steer_angle = np.deg2rad(
+                self.vehicle.get_physics_control().wheels[0].max_steer_angle
+            )
+            delta = float(control.steer * max_steer_angle)
+
+            kappa_seq = []
+
+            p = self.p
+            wps = next_current_lane_waypoints
+
+            assert len(wps) > p
+            
+            for i in range(len(wps) - 1):
+                wp0 = wps[i]
+                wp1 = wps[i + 1]
+
+                yaw0 = np.deg2rad(wp0.transform.rotation.yaw)
+                yaw1 = np.deg2rad(wp1.transform.rotation.yaw)
+
+                loc0 = wp0.transform.location
+                loc1 = wp1.transform.location
+
+                ds = np.hypot(loc1.x - loc0.x, loc1.y - loc0.y)
+
+                if ds > 1e-6:
+                    dyaw = np.arctan2(np.sin(yaw1 - yaw0), np.cos(yaw1 - yaw0))
+                    kappa = dyaw / ds
+                else:
+                    kappa = 0.0
+
+                if abs(kappa) < 1e-3:
+                    kappa = 0.0
+
+                kappa_seq.append(float(kappa))
+
+
+            kappa_seq = kappa_seq[:p]
+            kappa_seq = savgol_filter(kappa_seq, 5, 2)
+
+            vx = max(v, 1e-3)
+
+            lat_msg = LateralMpcState()
+            lat_msg.header.stamp = self.get_clock().now().to_msg()
+            lat_msg.header.frame_id = 'map'
+            lat_msg.e = -e
+            lat_msg.theta = theta
+            lat_msg.delta = delta
+            lat_msg.vx = vx
+            lat_msg.kappa_ref = list(kappa_seq)
+            self.lateral_mpc_state_pub.publish(lat_msg)
+
+            # self.get_logger().info(
+            #     f'Stanley: e={e:.3f}, psi={(yaw_vehicle - yaw_path):.3f}, v={v:.3f}'
+            # )
 
         if not self.create_markers:
             return
-        
-        current_lane = self.map.get_waypoint(vehicle_location, project_to_road=False)
+
+        marker_array = MarkerArray()
+        marker_array.markers.append(self.create_bbox_marker_world(0, bbox, vehicle_tf, RED))
+        idx = 1
 
         if current_lane is None:
+            self.marker_pub.publish(marker_array)
             return
+
+        rear_axle_local = self.coords_in_vehicle_frame(self.location2ndarray(rear_axle))
+        lane_local = self.waypoint_in_vehicle_frame(current_lane)
+        rear_axle_local[1, 0] = -rear_axle_local[1, 0]  # CARLA (LHS) → ROS (RHS)
+        lane_local[1, 0] = -lane_local[1, 0]  # CARLA (LHS) → ROS (RHS)
+        offset_msg = Float64()
+        offset_msg.data = rear_axle_local[1, 0] - lane_local[1, 0]
+        self.rear_axle_lane_offset_pub.publish(offset_msg)
 
         lanes = [current_lane]
         colors = [MAGENTA]
@@ -164,25 +400,40 @@ class VehicleNode(Node):
                 lanes.append(lane)
                 colors.append(color)
 
-        marker_array = MarkerArray()
-
         for i, (lane, color) in enumerate(zip(lanes, colors)):
             lane_local_point = self.waypoint_in_vehicle_frame(lane)
 
             lane_local_point[1, 0] = -lane_local_point[1, 0]  # CARLA (LHS) → ROS (RHS)
             
-            marker = self.create_marker(i, lane_local_point, color)
+            marker = self.create_marker(idx + i, lane_local_point, color)
 
             marker_array.markers.append(marker)
 
-        next_current_lane_waypoints = []
-        wp = current_lane
-        for _ in range(100):
-            wp_list = wp.next(0.2)
-            if not wp_list:
-                continue
-            wp = wp_list[0]
-            next_current_lane_waypoints.append(wp)
+        # -------- PURE PURSUIT DATA --------
+        if next_current_lane_waypoints:
+            xr = rear_axle.x
+            yr = rear_axle.y
+            yaw = np.deg2rad(vehicle_tf.rotation.yaw)
+
+            lookahead_loc = lookahead_wp.transform.location
+            xt = lookahead_loc.x
+            yt = lookahead_loc.y
+
+            # self.get_logger().info(
+            #     f'PP state: xr={xr:.3f}, yr={yr:.3f}, yaw={yaw:.3f}, '
+            #     f'xt={xt:.3f}, yt={yt:.3f}, L={L:.3f}'
+            # )
+
+            pp_msg = PPState()
+            pp_msg.header.stamp = self.get_clock().now().to_msg()
+            pp_msg.header.frame_id = 'map'
+            pp_msg.xr = xr
+            pp_msg.yr = yr
+            pp_msg.yaw = yaw
+            pp_msg.xt = xt
+            pp_msg.yt = yt
+            pp_msg.wheelbase = L
+            self.pp_state_pub.publish(pp_msg)
 
         offset_y = current_lane.lane_width/2
         idx = marker_array.markers[-1].id + 1
@@ -247,6 +498,32 @@ class VehicleNode(Node):
         m.color.a = 1.0
 
         return m
+
+    def create_bbox_marker_world(self, id : int, bbox : carla.BoundingBox, vehicle_tf : carla.Transform, color, alpha=0.3) -> Marker:
+        m = Marker()
+        m.header.frame_id = 'map'
+        m.header.stamp = self.get_clock().now().to_msg()
+        m.id = id
+        m.type = Marker.CUBE
+        m.action = Marker.ADD
+
+        bbox_world = vehicle_tf.transform(bbox.location)
+        m.pose.position.x = bbox_world.x
+        m.pose.position.y = -bbox_world.y  # CARLA (LHS) → ROS (RHS)
+        m.pose.position.z = bbox_world.z
+
+        m.pose.orientation.w = 1.0
+
+        m.scale.x = bbox.extent.x * 2.0
+        m.scale.y = bbox.extent.y * 2.0
+        m.scale.z = bbox.extent.z * 2.0
+
+        m.color.r = color[0]
+        m.color.g = color[1]
+        m.color.b = color[2]
+        m.color.a = alpha
+
+        return m
     
     def on_carla_tick(self, snapshot: carla.WorldSnapshot):
         if self.generate_imu_pub:
@@ -309,16 +586,19 @@ class VehicleNode(Node):
 
         self.vehicle.apply_control(control)
     
-    def setup_vehicle(self, world : carla.World, config, id, color, spawn_point_idx, x_offset, y_offset):
+    def setup_vehicle(self, world : carla.World, config, id, color, spawn_point_idx, x_offset, y_offset, yaw):
         bp_library = world.get_blueprint_library()
         map = world.get_map()
 
         spawn_point = map.get_spawn_points()[spawn_point_idx]
         spawn_point.location.x += x_offset
         spawn_point.location.y += y_offset
+        if yaw is not None:
+            spawn_point.rotation.yaw = yaw
         
         if self.fix_y:
-            self.fixed_y = spawn_point.location.y
+            # self.fixed_y = spawn_point.location.y
+            self.fixed_y = round(spawn_point.location.y, 1)
             
         bp = bp_library.filter(config.get('type'))[0]
         bp.set_attribute('color', color)

@@ -8,19 +8,30 @@
 namespace cruise_control {
 
 CruiseController::CruiseController(
+    double ts,
     double tau,
     int p,
     int c,
     double s,
     const std::vector<double>& phi_vals,
     const std::vector<double>& q_vals,
+    const Limit& a_limits,
+    const Limit& j_limits,
     const Limit& u_limits
 )
-    : tau{tau}
+    : ts{ts}
+    , tau{tau}
     , p{p}
     , c{c}
-    , s{s}
-    , u_limits{u_limits} {
+    , s{s} {
+
+    A = Eigen::Matrix<double, n_in, n_in>{
+        {1,  ts,         0},
+        {0,  1 - ts/tau, 0},
+        {0, -1/tau,      0}
+    };
+
+    B = Eigen::Vector<double, n_in>{0, ts/tau, 1/tau};
 
     C = Eigen::Matrix<double, n_out, n_in>::Identity();
     H = Eigen::Matrix<double, n_in, n_in>::Identity();
@@ -62,14 +73,55 @@ CruiseController::CruiseController(
         }
     }
 
+    A_hat = Eigen::MatrixXd::Zero(A.rows() * p, A.cols());
+    B_hat = Eigen::MatrixXd::Zero(n_in * p, c);
+    C_hat = Eigen::MatrixXd::Zero(C.rows() * p, C.cols());
+    D_hat = Eigen::MatrixXd::Zero(n_out * p, c);
+    H_hat = Eigen::MatrixXd::Zero(H.rows() * p, H.cols());
+
+    for (auto i = 0; i < p; i++) {
+        A_hat.block(i * A.rows(), 0, A.rows(), A.cols()) = A.pow(i + 1);
+
+        for (int m = 0; m < c; m++) {
+            if (m <= i) {
+                B_hat.block(i * n_in, m, n_in, 1)
+                    = A.pow(i - m) * B;
+            }
+        }
+
+        C_hat.block(i * C.rows(), 0, C.rows(), A.cols()) = C * A.pow(i + 1);
+
+        for (auto k = i, m = 0; k >= 0 && m < c; k--, m++) {
+            D_hat.block(i * C.rows(), m, C.rows(), B.cols()) = C * A.pow(k) * B;
+        }
+
+        H_hat.block(i * H.rows(), 0, H.rows(), H.cols()) = H;
+    }
+
+    M_hat = Eigen::VectorXd::Zero(n_in * p);
+    N_hat = Eigen::VectorXd::Zero(n_in * p);
+
+    for (auto i = 0; i < p; i++) {
+        M_hat.segment(i * n_in + 1, n_in - 1) <<
+            a_limits.min,
+            j_limits.min;
+
+        N_hat.segment(i * n_in + 1, n_in - 1) <<
+            a_limits.max,
+            j_limits.max;
+    }
+
+    U_min = Eigen::VectorXd::Constant(c, u_limits.min);
+    U_max = Eigen::VectorXd::Constant(c, u_limits.max);
+
     solver.settings()->setTimeLimit(0.04);
     solver.settings()->setVerbosity(false);
     solver.data()->setNumberOfVariables(c);
-    solver.data()->setNumberOfConstraints(c);
+    solver.data()->setNumberOfConstraints(n_in * p + c);
 }
 
 
-std::pair<double, const Eigen::Vector<double, CruiseController::n_out>> CruiseController::calculate_control(double ts, double v_ref, double v, double a) {
+std::pair<double, const Eigen::Vector<double, CruiseController::n_out>> CruiseController::calculate_control(double v_ref, double v, double a) {
     double j = (a - a_prev) / ts;
     j = 0;
 
@@ -83,34 +135,12 @@ std::pair<double, const Eigen::Vector<double, CruiseController::n_out>> CruiseCo
         ex = x - *x_predicted;
     }
 
-    A = Eigen::Matrix<double, n_in, n_in>{
-        {1,  ts,         0},
-        {0,  1 - ts/tau, 0},
-        {0, -1/tau,      0}
-    };
-
-    B = Eigen::Vector<double, n_in>{0, ts/tau, 1/tau};
-
     Z = Eigen::Vector<double, n_out>{v_ref, 0, 0};
 
-    A_hat = Eigen::MatrixXd::Zero(A.rows() * p, A.cols());
-    C_hat = Eigen::MatrixXd::Zero(C.rows() * p, C.cols());
-    H_hat = Eigen::MatrixXd::Zero(H.rows() * p, H.cols());
     Z_hat = Eigen::VectorXd::Zero(Z.rows() * p);
 
     for (auto i = 0; i < p; i++) {
-        A_hat.block(i * A.rows(), 0, A.rows(), A.cols()) = A.pow(i + 1);
-        C_hat.block(i * C.rows(), 0, C.rows(), A.cols()) = C * A.pow(i + 1);
-        H_hat.block(i * H.rows(), 0, H.rows(), H.cols()) = H;
         Z_hat.block(i * Z.rows(), 0, Z.rows(), Z.cols()) = Z;
-    }
-
-    D_hat = Eigen::MatrixXd::Zero(n_out * p, c);
-
-    for (auto i = 0; i < p; i++) {
-        for (auto k = i, m = 0; k >= 0 && m < c; k--, m++) {
-            D_hat.block(i * C.rows(), m, C.rows(), B.cols()) = C * A.pow(k) * B;
-        }
     }
 
     Eigen::Vector<double, n_out> y = C * x - Z;
@@ -131,17 +161,35 @@ std::pair<double, const Eigen::Vector<double, CruiseController::n_out>> CruiseCo
     Eigen::MatrixXd Hqp = H1 + H2;
     Eigen::VectorXd g = g1 + g2;
 
-    Eigen::VectorXd u_min = Eigen::VectorXd::Constant(c, u_limits.min);
-    Eigen::VectorXd u_max = Eigen::VectorXd::Constant(c,  u_limits.max);
+    for (auto i = 0; i < p; i++) {
+        M_hat.segment(i * n_in, 1) << 0.;
+        N_hat.segment(i * n_in, 1) << v_ref + 20.;
+    }
 
-    Eigen::SparseMatrix<double> constr_matrix = Eigen::MatrixXd::Identity(c, c).sparseView();
+    Eigen::VectorXd Mu = M_hat - A_hat * x;
+    Eigen::VectorXd Nu = N_hat - A_hat * x;
 
+    int constr_num = n_in * p + c;
+
+    Eigen::VectorXd u_min(constr_num);
+    u_min.head(n_in * p) = Mu;
+    u_min.tail(c) = U_min;
+
+    Eigen::VectorXd u_max(constr_num);
+    u_max.head(n_in * p) = Nu;
+    u_max.tail(c) = U_max;
+
+    Eigen::MatrixXd constr_matrix = Eigen::MatrixXd::Zero(constr_num, c);
+    constr_matrix.block(0, 0, n_in*p, c) = B_hat;
+    constr_matrix.block(n_in*p, 0, c, c) = Eigen::MatrixXd::Identity(c,c);
+
+    Eigen::SparseMatrix<double> constr_matrix_sparse = constr_matrix.sparseView();
     Eigen::SparseMatrix<double> Hqp_sparse = Hqp.sparseView();
 
     if (!x_predicted) {
         solver.data()->setHessianMatrix(Hqp_sparse);
         solver.data()->setGradient(g);
-        solver.data()->setLinearConstraintsMatrix(constr_matrix);
+        solver.data()->setLinearConstraintsMatrix(constr_matrix_sparse);
         solver.data()->setLowerBound(u_min);
         solver.data()->setUpperBound(u_max);
 
@@ -152,7 +200,7 @@ std::pair<double, const Eigen::Vector<double, CruiseController::n_out>> CruiseCo
     else {
         solver.updateHessianMatrix(Hqp_sparse);
         solver.updateGradient(g);
-        solver.updateLinearConstraintsMatrix(constr_matrix);
+        solver.updateLinearConstraintsMatrix(constr_matrix_sparse);
         solver.updateBounds(u_min, u_max);
     }
 
@@ -167,7 +215,7 @@ std::pair<double, const Eigen::Vector<double, CruiseController::n_out>> CruiseCo
         solver.settings()->setWarmStart(true);
     }
 
-    res = std::clamp(res, u_limits.min, u_limits.max);
+    res = std::clamp(res, U_min(0), U_max(0));
 
     x_predicted = B * res + A * x + H * ex;
     u_prev = res;
